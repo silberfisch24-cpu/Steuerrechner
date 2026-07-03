@@ -315,43 +315,59 @@ export default function SteuerreformRechner() {
                     <div className="sr-root">
                         <style>
                             {
-                                ` @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+                                ` body {
+                                     background: #f2f8fa;
+                                     margin: 0;
+                                     padding: 40px 0;
+                                 }
 
-                                .sr-root {
-                                    --paper: #ffffff;
-                                    --panel: #f2f8fa;
-                                    --ink: #2d3c4b;
-                                    --ink-soft: #737986;
-                                    --line: #ddeef1;
-                                    --steel: #2d3c4b;
-                                    --steel-soft: #737986;
-                                    --gold: #52b7c1;
-                                    --gold-soft: #a7d5dc;
-                                    --brick: #ffa600;
-                                    --c-stadt: #737986;
-                                    --c-vorstadt: #ffa600;
-                                    --c-land: #2d3c4b;
-                                    font-family: 'IBM Plex Sans', sans-serif;
-                                    background: var(--paper);
-                                    color: var(--ink);
-                                    padding: 28px;
-                                    border-radius: 4px;
-                                    max-width: 1180px;
-                                    margin: 0 auto;
-                                    box-sizing: border-box;
-                                }
+                                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;800&family=IBM+Plex+Serif:ital,wght@0,400;0,700;1,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-                                .sr-root * {
-                                    box-sizing: border-box;
-                                }
+                                 .sr-root {
+                                     --paper: #ffffff;
+                                     --panel: #f2f8fa;
+                                     --ink: #2d3c4b;
+                                     --ink-soft: #737986;
+                                     --line: #ddeef1;
+                                     --steel: #2d3c4b;
+                                     --steel-soft: #737986;
+                                     --gold: #52b7c1;
+                                     --gold-soft: #a7d5dc;
+                                     --brick: #ffa600;
+                                     --c-stadt: #737986;
+                                     --c-vorstadt: #ffa600;
+                                     --c-land: #2d3c4b;
+                                     font-family: 'IBM Plex Serif', serif;
+                                     background: var(--paper);
+                                     color: var(--ink);
+                                     padding: 28px;
+                                     border-radius: 4px;
+                                     max-width: 1180px;
+                                     margin: 0 auto;
+                                     box-sizing: border-box;
+                                     box-shadow: 0 10px 30px rgba(45, 60, 75, 0.04);
+                                     border: 1px solid var(--line);
+                                 }
 
-                                .sr-mono {
-                                    font-family: 'IBM Plex Mono', monospace;
-                                }
+                                 .sr-root * {
+                                     box-sizing: border-box;
+                                 }
 
-                                .sr-display {
-                                    font-family: 'Fraunces', serif;
-                                }
+                                 .sr-mono {
+                                     font-family: 'IBM Plex Mono', monospace;
+                                 }
+
+                                 .sr-display {
+                                     font-family: 'Inter', sans-serif;
+                                     font-weight: 800;
+                                     letter-spacing: -0.02em;
+                                 }
+
+                                 .sr-root b, .sr-root strong {
+                                     font-family: 'IBM Plex Serif', serif;
+                                     font-weight: 700;
+                                     font-style: italic;
+                                 }
 
                                 .sr-header {
                                     display: flex;
@@ -374,19 +390,23 @@ export default function SteuerreformRechner() {
                                 }
 
                                 .sr-title {
-                                    font-size: 26px;
-                                    font-weight: 500;
-                                    margin: 0;
-                                    line-height: 1.15;
-                                }
+                                     font-family: 'Inter', sans-serif;
+                                     font-size: 26px;
+                                     font-weight: 800;
+                                     letter-spacing: -0.02em;
+                                     margin: 0;
+                                     line-height: 1.15;
+                                 }
 
-                                .sr-subtitle {
-                                    font-size: 12.5px;
-                                    color: var(--ink-soft);
-                                    max-width: 360px;
-                                    text-align: right;
-                                    line-height: 1.5;
-                                }
+                                 .sr-subtitle {
+                                     font-family: 'Inter', sans-serif;
+                                     font-weight: 500;
+                                     font-size: 12.5px;
+                                     color: var(--ink-soft);
+                                     max-width: 360px;
+                                     text-align: right;
+                                     line-height: 1.5;
+                                 }
 
                                 .sr-grid {
                                     display: grid;
@@ -537,12 +557,12 @@ export default function SteuerreformRechner() {
                                     border-bottom: none;
                                 }
 
-                                .sr-mini-table td:first-child {
-                                    text-align: left;
-                                    font-family: 'IBM Plex Sans', sans-serif;
-                                    color: var(--ink-soft);
-                                    font-size: 11px;
-                                }
+                                 .sr-mini-table td:first-child {
+                                     text-align: left;
+                                     font-family: 'IBM Plex Serif', serif;
+                                     color: var(--ink-soft);
+                                     font-size: 11px;
+                                 }
 
                                 .sr-chart-wrap {
                                     background: var(--panel);
@@ -611,11 +631,11 @@ export default function SteuerreformRechner() {
                                     border-bottom: 1px solid var(--line);
                                 }
 
-                                .sr-table td:first-child {
-                                    text-align: left;
-                                    font-family: 'IBM Plex Sans', sans-serif;
-                                    color: var(--ink);
-                                }
+                                 .sr-table td:first-child {
+                                     text-align: left;
+                                     font-family: 'IBM Plex Serif', serif;
+                                     color: var(--ink);
+                                 }
 
                                 .sr-table tr.sr-highlight td {
                                     color: var(--gold);
