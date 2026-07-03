@@ -329,14 +329,17 @@ export default function SteuerreformRechner() {
                                      --ink: #2d3c4b;
                                      --ink-soft: #737986;
                                      --line: #ddeef1;
-                                     --steel: #2d3c4b;
-                                     --steel-soft: #737986;
-                                     --gold: #52b7c1;
-                                     --gold-soft: #a7d5dc;
-                                     --brick: #ffa600;
-                                     --c-stadt: #737986;
-                                     --c-vorstadt: #ffa600;
-                                     --c-land: #2d3c4b;
+                                     --grid-color: #e5e5e9;
+                                     
+                                     --steel: #2d3c4b;      /* Status Quo 2026 (Rhöndorf-Blau) */
+                                     --steel-soft: #737986; /* Status Quo 2026 Füllungen */
+                                     --turkis: #52b7c1;     /* Reform 2028 (Cadenabbia-Türkis) */
+                                     --turkis-soft: #a7d5dc;/* Reform 2028 Füllungen */
+                                     --gold: #ffa600;       /* Eigene Berechnung / Ergebnis (Union-Gold) */
+                                     
+                                     --c-stadt: #737986;    /* Städter (Rhöndorf-Blau 60%) */
+                                     --c-vorstadt: #bec1c7; /* Vorstadt (Rhöndorf-Blau 25% - neutralisiert!) */
+                                     --c-land: #2d3c4b;     /* Land (Rhöndorf-Blau) */
                                      font-family: 'IBM Plex Serif', serif;
                                      background: var(--paper);
                                      color: var(--ink);
@@ -819,17 +822,17 @@ export default function SteuerreformRechner() {
                                                 background: "var(--gold)" , height: "3px" }} /> Eigene Berechnung,
                                             absolut € ({kids} Kind{kids === 1 ? "" : "er"})</span>
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--brick)" , height: "2px" ,
-                                                borderTop: "2px dashed var(--brick)" }} /> Eigene Berechnung, relativ %
+                                                background: "var(--turkis)" , height: "2px" ,
+                                                borderTop: "2px dashed var(--turkis)" }} /> Eigene Berechnung, relativ %
                                             (rechte Achse)</span>
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--gold)" , opacity: 0.3, height: "10px" , borderRadius:
+                                                background: "var(--turkis)" , opacity: 0.3, height: "10px" , borderRadius:
                                                 0 }} /> Kindergeld-Erhöhung ({eur0(Math.max(0, current.kgT1 -
                                             current.kgT0))}, unabhängig vom Einkommen)</span>
                                     </div>
                                     <ResponsiveContainer width="100%" height={360}>
                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
-                                            <CartesianGrid stroke="var(--line)" strokeDasharray="2 3" />
+                                            <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                             <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}k`}
                                                 stroke="var(--ink-soft)"
                                                 tick={{ fontFamily: "IBM Plex Mono", fontSize: 11 }}
@@ -839,7 +842,7 @@ export default function SteuerreformRechner() {
                                                 <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }}
                                                     tickFormatter={axisEuro} width={56} />
-                                                <YAxis yAxisId="right" orientation="right" stroke="var(--brick)" tick={{
+                                                <YAxis yAxisId="right" orientation="right" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }} tickFormatter={(v)=>
                                                     `${v}%`}
                                                     width={44}
@@ -874,11 +877,11 @@ export default function SteuerreformRechner() {
                                                         }}
                                                         />
                                                         <ReferenceLine yAxisId="left" x={bruttoAktuell}
-                                                            stroke="var(--brick)" strokeDasharray="3 3"
+                                                            stroke="var(--ink-soft)" strokeDasharray="3 3"
                                                             strokeWidth={1} />
                                                         <ReferenceArea yAxisId="left" y1={0} y2={Math.max(0,
-                                                            current.kgT1 - current.kgT0)} fill="var(--gold)"
-                                                            fillOpacity={0.12} stroke="var(--gold)" strokeOpacity={0.4}
+                                                            current.kgT1 - current.kgT0)} fill="var(--turkis)"
+                                                            fillOpacity={0.12} stroke="var(--turkis)" strokeOpacity={0.4}
                                                             strokeDasharray="2 2" ifOverflow="extendDomain" />
                                                         <Line yAxisId="left" type="monotone" dataKey="stadt"
                                                             name="Städter (Referenz)" stroke="var(--c-stadt)"
@@ -896,7 +899,7 @@ export default function SteuerreformRechner() {
                                                             name="Eigene Berechnung, absolut" stroke="var(--gold)"
                                                             strokeWidth={2.5} dot={false} isAnimationActive={false} />
                                                         <Line yAxisId="right" type="monotone" dataKey="eigenPct"
-                                                            name="Eigene Berechnung, relativ" stroke="var(--brick)"
+                                                            name="Eigene Berechnung, relativ" stroke="var(--turkis)"
                                                             strokeWidth={1.75} dot={false} strokeDasharray="2 2"
                                                             connectNulls={false} isAnimationActive={false} />
                                         </LineChart>
@@ -911,8 +914,8 @@ export default function SteuerreformRechner() {
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
                                                 background: "var(--gold)" }} /> Netto-Transferbilanz 2028</span>
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--brick)" , height: "2px" ,
-                                                borderTop: "2px dashed var(--brick)" }} /> Ø-Steuersatz auf real
+                                                background: "var(--turkis)" , height: "2px" ,
+                                                borderTop: "2px dashed var(--turkis)" }} /> Ø-Steuersatz auf real
                                             gezahlte Steuer (rechte Achse)</span>
                                         <span className="sr-legend-item" style={{ color: "var(--ink-soft)" }}>Eigenes
                                             Profil: {km1}{verheiratet ? ` km / ${km2} km` : " km"}, {kids} Kind{kids ===
@@ -920,7 +923,7 @@ export default function SteuerreformRechner() {
                                     </div>
                                     <ResponsiveContainer width="100%" height={320}>
                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
-                                            <CartesianGrid stroke="var(--line)" strokeDasharray="2 3" />
+                                            <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                             <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}k`}
                                                 stroke="var(--ink-soft)"
                                                 tick={{ fontFamily: "IBM Plex Mono", fontSize: 11 }}
@@ -929,14 +932,14 @@ export default function SteuerreformRechner() {
                                                 />
                                                 <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }}
-                                                    tickFormatter={axisEuro} width={56} domain={[-14000, 52000]}
-                                                    ticks={[-14000, 0, 13000, 26000, 39000, 52000]} />
-                                                <YAxis yAxisId="right" orientation="right" stroke="var(--brick)" tick={{
+                                                    tickFormatter={axisEuro} width={56} domain={[-7000, 40000]}
+                                                    ticks={[-7000, 0, 10000, 20000, 30000, 40000]} />
+                                                <YAxis yAxisId="right" orientation="right" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }} tickFormatter={(v)=>
                                                     `${v}%`}
                                                     width={44}
-                                                    domain={[0, 30]}
-                                                    ticks={[0, 7.5, 15, 22.5, 30]}
+                                                    domain={[0, 25]}
+                                                    ticks={[0, 5, 10, 15, 20, 25]}
                                                     />
                                                     <Tooltip labelFormatter={(v)=> eur0(v)}
                                                         formatter={(v, name) => [name && name.startsWith("Ø-Steuersatz")
@@ -945,7 +948,7 @@ export default function SteuerreformRechner() {
                                                         border: "1px solid var(--line)" }}
                                                         />
                                                         <ReferenceLine yAxisId="left" x={bruttoAktuell}
-                                                            stroke="var(--brick)" strokeDasharray="3 3"
+                                                            stroke="var(--ink-soft)" strokeDasharray="3 3"
                                                             strokeWidth={1} />
                                                         <ReferenceLine yAxisId="left" y={0} stroke="var(--ink)"
                                                             strokeWidth={1} />
@@ -957,10 +960,10 @@ export default function SteuerreformRechner() {
                                                                 fontSize={10} />
                                                         </ReferenceArea>
                                                         <ReferenceArea yAxisId="left" x1={0} x2={kgGrenzeT1} y1={-14000}
-                                                            y2={0} fill="var(--gold)" fillOpacity={0.12} stroke="none"
+                                                            y2={0} fill="var(--turkis)" fillOpacity={0.12} stroke="none"
                                                             ifOverflow="extendDomain">
                                                             <Label value="Kindergeld 2028" position="insideTopLeft"
-                                                                fill="var(--gold)" fontFamily="IBM Plex Mono"
+                                                                fill="var(--turkis)" fontFamily="IBM Plex Mono"
                                                                 fontSize={10} />
                                                         </ReferenceArea>
                                                         <Line yAxisId="left" type="monotone" dataKey="effT0"
@@ -974,7 +977,7 @@ export default function SteuerreformRechner() {
                                                             strokeWidth={1.5} dot={false} strokeDasharray="2 2"
                                                             isAnimationActive={false} />
                                                         <Line yAxisId="right" type="monotone" dataKey="avgT1"
-                                                            name="Ø-Steuersatz 2028" stroke="var(--gold)"
+                                                            name="Ø-Steuersatz 2028" stroke="var(--turkis)"
                                                             strokeWidth={1.5} dot={false} strokeDasharray="2 2"
                                                             isAnimationActive={false} />
                                         </LineChart>
