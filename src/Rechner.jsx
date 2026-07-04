@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   LineChart,
-  ComposedChart,
   Line,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -98,8 +96,10 @@ function incomeMarginalRate(zve, gfb, eck1, eck2, verheiratet) {
 // die abweichende AG/AN-Aufteilung bei der Pflegeversicherung betrifft nur
 // den Freistaat Sachsen, nicht Sachsen-Anhalt)
 // ---------------------------------------------------------------------------
-const BBG_KV_PV = 69750;   // Beitragsbemessungsgrenze Kranken-/Pflegeversicherung, 2026
-const BBG_RV_ALV = 101400; // Beitragsbemessungsgrenze Renten-/Arbeitslosenversicherung, 2026
+const BBG_KV_PV_2026 = 69750;   // Beitragsbemessungsgrenze Kranken-/Pflegeversicherung, 2026
+const BBG_RV_ALV_2026 = 101400; // Beitragsbemessungsgrenze Renten-/Arbeitslosenversicherung, 2026
+const BBG_KV_PV_2027 = 76800;   // Beitragsbemessungsgrenze Kranken-/Pflegeversicherung, 2027 (Prognose ca. 76.500 - 77.100 €)
+const BBG_RV_ALV_2027 = 104400; // Beitragsbemessungsgrenze Renten-/Arbeitslosenversicherung, 2027 (Prognose ca. 104.400 €)
 const SATZ_RV = 0.093;     // Arbeitnehmeranteil Rentenversicherung (18,6% / 2)
 const SATZ_ALV = 0.013;    // Arbeitnehmeranteil Arbeitslosenversicherung (2,6% / 2)
 const SATZ_KV = 0.0875;    // Arbeitnehmeranteil Krankenversicherung: 7,3% + halber Zusatzbeitrag (Ø 2,9% / 2)
@@ -115,11 +115,14 @@ function pvSatzAN(kids) {
 
 // Sozialversicherungsbeiträge einer Person: real, gedeckelt an der jeweils
 // eigenen (personenbezogenen!) Beitragsbemessungsgrenze.
-function calcSVBeitrag(bruttoPerson, kids) {
+function calcSVBeitrag(bruttoPerson, kids, use2027Limits = false) {
   if (bruttoPerson <= 0) return { rv: 0, alv: 0, kv: 0, pv: 0, sa: 0, total: 0 };
   
-  const bKV = Math.min(bruttoPerson, BBG_KV_PV);
-  const bRV = Math.min(bruttoPerson, BBG_RV_ALV);
+  const bbgKV = use2027Limits ? BBG_KV_PV_2027 : BBG_KV_PV_2026;
+  const bbgRV = use2027Limits ? BBG_RV_ALV_2027 : BBG_RV_ALV_2026;
+  
+  const bKV = Math.min(bruttoPerson, bbgKV);
+  const bRV = Math.min(bruttoPerson, bbgRV);
   
   const rv = bRV * SATZ_RV;
   const alv = bRV * SATZ_ALV;
@@ -136,7 +139,7 @@ function calcSVBeitrag(bruttoPerson, kids) {
   return { rv, alv, kv, pv, sa, total: rv + alv + kv + pv };
 }
 
-function calculateNetRelief(brutto1, brutto2, km1, km2, kids, familienstand) {
+function calculateNetRelief(brutto1, brutto2, km1, km2, kids, familienstand, adjustSV = false) {
   const verheiratet = familienstand === "verheiratet";
   const bruttoGesamt = brutto1 + (verheiratet ? brutto2 : 0);
   
@@ -146,14 +149,18 @@ function calculateNetRelief(brutto1, brutto2, km1, km2, kids, familienstand) {
   const wkT0 = Math.max(PARAMS.t0.pausch, realWk1) + (verheiratet ? Math.max(PARAMS.t0.pausch, realWk2) : 0);
   const wkT1 = Math.max(PARAMS.t1.pausch, realWk1) + (verheiratet ? Math.max(PARAMS.t1.pausch, realWk2) : 0);
   
-  const sv1 = calcSVBeitrag(brutto1, kids);
-  const sv2 = verheiratet ? calcSVBeitrag(brutto2, kids) : { rv: 0, alv: 0, kv: 0, pv: 0, sa: 0, total: 0 };
+  // SV für T0 (2026): Immer 2026-Grenzwerte
+  const sv1_t0 = calcSVBeitrag(brutto1, kids, false);
+  const sv2_t0 = verheiratet ? calcSVBeitrag(brutto2, kids, false) : { rv: 0, alv: 0, kv: 0, pv: 0, sa: 0, total: 0 };
+  const saT0 = sv1_t0.sa + sv2_t0.sa;
   
-  // SV-Beiträge sind nicht Teil der Steuerreform und daher für t0 und t1 gleich.
-  const sa = sv1.sa + sv2.sa;
+  // SV für T1 (2028): 2027-Grenzwerte wenn adjustSV aktiv, sonst 2026-Grenzwerte
+  const sv1_t1 = calcSVBeitrag(brutto1, kids, adjustSV);
+  const sv2_t1 = verheiratet ? calcSVBeitrag(brutto2, kids, adjustSV) : { rv: 0, alv: 0, kv: 0, pv: 0, sa: 0, total: 0 };
+  const saT1 = sv1_t1.sa + sv2_t1.sa;
   
-  const zveT0 = Math.max(0, bruttoGesamt - wkT0 - sa);
-  const zveT1 = Math.max(0, bruttoGesamt - wkT1 - sa);
+  const zveT0 = Math.max(0, bruttoGesamt - wkT0 - saT0);
+  const zveT1 = Math.max(0, bruttoGesamt - wkT1 - saT1);
   
   // Kinderfreibetrag: volle Höhe (inkl. BEA) nur bei Zusammenveranlagung;
   // Alleinstehende erhalten grundsätzlich nur den hälftigen Freibetrag.
@@ -189,8 +196,20 @@ function calculateNetRelief(brutto1, brutto2, km1, km2, kids, familienstand) {
   // Familie auszahlt. Kein künstlicher Floor mehr nötig – die Differenz ist
   // automatisch korrekt, auch im Übergang zwischen Nullsteuerzone und
   // Günstigerprüfungs-Knick.
-  const effT0 = estT0 - vorteilT0;
-  const effT1 = estT1 - vorteilT1;
+  const effT0_tax = estT0 - vorteilT0;
+  const effT1_tax = estT1 - vorteilT1;
+  
+  // Reales Gesamteinkommen (Netto) nach Sozialabgaben und Steuer
+  const svTotalT0 = sv1_t0.total + sv2_t0.total;
+  const svTotalT1 = sv1_t1.total + sv2_t1.total;
+  const nettoT0 = bruttoGesamt - svTotalT0 - effT0_tax;
+  const nettoT1 = bruttoGesamt - svTotalT1 - effT1_tax;
+  
+  // y-Achsenwerte für Grafik 2: bei adjustSV inkl. Sozialabgaben
+  const effT0 = adjustSV ? (effT0_tax + svTotalT0) : effT0_tax;
+  const effT1 = adjustSV ? (effT1_tax + svTotalT1) : effT1_tax;
+  
+  // Die Entlastung ist immer die Differenz der Belastungen
   const entlastung = effT0 - effT1;
   
   // Real vom Lohn abgezogene / veranlagte Steuer: Kindergeld ist eine separate
@@ -224,9 +243,12 @@ function calculateNetRelief(brutto1, brutto2, km1, km2, kids, familienstand) {
     vorteilT1,
     kgT0,
     kgT1,
-    sa,
-    sv1,
-    sv2,
+    saT0,
+    saT1,
+    svTotalT0,
+    svTotalT1,
+    nettoT0,
+    nettoT1,
     avgT0,
     avgT1,
     grenzT0,
@@ -255,6 +277,7 @@ export default function SteuerreformRechner() {
   const [km1, setKm1] = useState(20);
   const [km2, setKm2] = useState(8);
   const [kids, setKids] = useState(2);
+  const [adjustSV, setAdjustSV] = useState(false);
 
   // ResponsiveContainer misst seine Breite beim allerersten Rendern in
   // Grid-Layouts manchmal falsch (0px) und zeichnet die Linien erst nach
@@ -277,12 +300,12 @@ export default function SteuerreformRechner() {
       const row = { brutto: b };
       REF_PROFILES.forEach((p) => {
         row[p.key] = Math.round(
-          calculateNetRelief(b * 0.5, b * 0.5, p.km1, p.km2, REF_KIDS, "verheiratet").entlastung
+          calculateNetRelief(b * 0.5, b * 0.5, p.km1, p.km2, REF_KIDS, "verheiratet", adjustSV).entlastung
         );
       });
       const e1 = b * splitRatio;
       const e2 = b - e1;
-      const eigen = calculateNetRelief(e1, e2, km1, km2, kids, familienstand);
+      const eigen = calculateNetRelief(e1, e2, km1, km2, kids, familienstand, adjustSV);
       row.eigen = Math.round(eigen.entlastung);
       row.effT0 = Math.round(eigen.effT0);
       row.effT1 = Math.round(eigen.effT1);
@@ -298,7 +321,7 @@ export default function SteuerreformRechner() {
       points.push(row);
     }
     return points;
-  }, [km1, km2, kids, splitRatio, familienstand]);
+  }, [km1, km2, kids, splitRatio, familienstand, adjustSV]);
 
   // Letzter Bruttowert, an dem die Netto-Transferbilanz noch negativ ist –
   // d.h. das Kindergeld übersteigt die tarifliche Steuer noch vollständig.
@@ -307,8 +330,8 @@ export default function SteuerreformRechner() {
   const kgGrenzeT1 = chartData.find((p) => p.effT1 >= 0)?.brutto ?? 200000;
 
   const current = useMemo(
-    () => calculateNetRelief(brutto1, verheiratet ? brutto2 : 0, km1, km2, kids, familienstand),
-    [brutto1, brutto2, km1, km2, kids, familienstand, verheiratet]
+    () => calculateNetRelief(brutto1, verheiratet ? brutto2 : 0, km1, km2, kids, familienstand, adjustSV),
+    [brutto1, brutto2, km1, km2, kids, familienstand, verheiratet, adjustSV]
   );
 
                     return (
@@ -487,13 +510,59 @@ export default function SteuerreformRechner() {
                                     color: var(--ink);
                                 }
 
-                                .sr-kids button.active {
-                                    background: var(--steel);
-                                    color: var(--paper);
-                                    border-color: var(--steel);
-                                }
+                                                         .sr-kids button.active {
+                                     background: var(--steel);
+                                     color: var(--paper);
+                                     border-color: var(--steel);
+                                 }
 
-                                .sr-readout {
+                                 .sr-toggle-container {
+                                     display: flex;
+                                     align-items: center;
+                                     gap: 10px;
+                                     cursor: pointer;
+                                     margin-top: 14px;
+                                     user-select: none;
+                                 }
+
+                                 .sr-toggle-switch {
+                                     width: 38px;
+                                     height: 20px;
+                                     background-color: var(--line);
+                                     border-radius: 10px;
+                                     position: relative;
+                                     transition: background-color 0.2s ease;
+                                     border: 1px solid var(--line);
+                                 }
+
+                                 .sr-toggle-switch.active {
+                                     background-color: var(--turkis);
+                                     border-color: var(--turkis);
+                                 }
+
+                                 .sr-toggle-handle {
+                                     width: 14px;
+                                     height: 14px;
+                                     background-color: var(--paper);
+                                     border-radius: 50%;
+                                     position: absolute;
+                                     top: 2px;
+                                     left: 2px;
+                                     transition: transform 0.2s ease;
+                                     box-shadow: 0 1px 3px rgba(45, 60, 75, 0.15);
+                                 }
+
+                                 .sr-toggle-switch.active .sr-toggle-handle {
+                                     transform: translateX(18px);
+                                 }
+
+                                 .sr-toggle-label {
+                                     font-size: 12.5px;
+                                     color: var(--ink);
+                                     font-weight: 500;
+                                 }
+
+                                 .sr-readout {
                                     margin-top: 18px;
                                     padding-top: 16px;
                                     border-top: 1px solid var(--line);
@@ -760,6 +829,15 @@ export default function SteuerreformRechner() {
                                     </div>
                                 </div>
 
+                                 <div className="sr-field">
+                                     <div className="sr-toggle-container" onClick={() => setAdjustSV(!adjustSV)}>
+                                         <div className={`sr-toggle-switch ${adjustSV ? "active" : ""}`}>
+                                             <div className="sr-toggle-handle" />
+                                         </div>
+                                         <span className="sr-toggle-label">Sozialabgaben 2027 anpassen</span>
+                                     </div>
+                                 </div>
+
                                 <div className="sr-readout">
                                     <div className="sr-readout-label">Entlastung pro Jahr</div>
                                     <div className="sr-readout-value">
@@ -784,10 +862,17 @@ export default function SteuerreformRechner() {
                                         </thead>
                                         <tbody>
                                             <tr>
-                                                <td>SV-Beiträge (AN, unverändert)</td>
-                                                <td>{eur0(current.sa)}</td>
-                                                <td>{eur0(current.sa)}</td>
+                                                <td>{adjustSV ? "Sozialabgaben (Gesamt-AN)" : "SV-Beiträge (AN, abzugsfähig)"}</td>
+                                                <td>{eur0(adjustSV ? current.svTotalT0 : current.saT0)}</td>
+                                                <td>{eur0(adjustSV ? current.svTotalT1 : current.saT1)}</td>
                                             </tr>
+                                            {adjustSV && (
+                                                <tr>
+                                                    <td>Reales Netto (inkl. KG)</td>
+                                                    <td>{eur0(current.nettoT0)}</td>
+                                                    <td>{eur0(current.nettoT1)}</td>
+                                                </tr>
+                                            )}
                                             <tr>
                                                 <td>Netto-Transferbilanz</td>
                                                 <td>{eur0(current.effT0)}</td>
@@ -909,17 +994,16 @@ export default function SteuerreformRechner() {
                                 <div className="sr-chart-wrap" style={{ marginTop: 18 }}>
                                     <div className="sr-legend">
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--steel)" }} /> Netto-Transferbilanz 2026 (Steuer ./.
-                                            Kindergeld/KFB)</span>
+                                                background: "var(--steel)" }} /> {adjustSV ? "Netto-Abgabenlast 2026 (Steuer + SV ./. Kindergeld)" : "Netto-Transferbilanz 2026 (Steuer ./. Kindergeld/KFB)"}</span>
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--gold)" }} /> Netto-Transferbilanz 2028</span>
+                                                background: "var(--gold)" }} /> {adjustSV ? "Netto-Abgabenlast 2028" : "Netto-Transferbilanz 2028"}</span>
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
                                                 background: "var(--turkis)" , height: "2px" ,
                                                 borderTop: "2px dashed var(--turkis)" }} /> Ø-Steuersatz auf real
                                             gezahlte Steuer (rechte Achse)</span>
                                         <span className="sr-legend-item" style={{ color: "var(--ink-soft)" }}>Eigenes
                                             Profil: {km1}{verheiratet ? ` km / ${km2} km` : " km"}, {kids} Kind{kids ===
-                                            1 ? "" : "er"} · negativer Bereich = Kindergeld übersteigt die Steuer</span>
+                                            1 ? "" : "er"} · {adjustSV ? "negativer Bereich = Kindergeld übersteigt Steuer + SV" : "negativer Bereich = Kindergeld übersteigt die Steuer"}</span>
                                     </div>
                                     <ResponsiveContainer width="100%" height={320}>
                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
@@ -932,8 +1016,9 @@ export default function SteuerreformRechner() {
                                                 />
                                                 <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }}
-                                                    tickFormatter={axisEuro} width={56} domain={[-7000, 40000]}
-                                                    ticks={[-7000, 0, 10000, 20000, 30000, 40000]} />
+                                                    tickFormatter={axisEuro} width={56} 
+                                                    domain={adjustSV ? [-7000, 80000] : [-7000, 40000]}
+                                                    ticks={adjustSV ? [-7000, 0, 20000, 40000, 60000, 80000] : [-7000, 0, 10000, 20000, 30000, 40000]} />
                                                 <YAxis yAxisId="right" orientation="right" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }} tickFormatter={(v)=>
                                                     `${v}%`}
@@ -955,22 +1040,22 @@ export default function SteuerreformRechner() {
                                                         <ReferenceArea yAxisId="left" x1={0} x2={kgGrenzeT0} y1={-14000}
                                                             y2={0} fill="var(--steel)" fillOpacity={0.12} stroke="none"
                                                             ifOverflow="extendDomain">
-                                                            <Label value="Kindergeld 2026" position="insideBottomLeft"
+                                                            <Label value={adjustSV ? "KG Überschuss 2026" : "Kindergeld 2026"} position="insideBottomLeft"
                                                                 fill="var(--steel)" fontFamily="IBM Plex Mono"
                                                                 fontSize={10} />
                                                         </ReferenceArea>
                                                         <ReferenceArea yAxisId="left" x1={0} x2={kgGrenzeT1} y1={-14000}
                                                             y2={0} fill="var(--turkis)" fillOpacity={0.12} stroke="none"
                                                             ifOverflow="extendDomain">
-                                                            <Label value="Kindergeld 2028" position="insideTopLeft"
+                                                            <Label value={adjustSV ? "KG Überschuss 2028" : "Kindergeld 2028"} position="insideTopLeft"
                                                                 fill="var(--turkis)" fontFamily="IBM Plex Mono"
                                                                 fontSize={10} />
                                                         </ReferenceArea>
                                                         <Line yAxisId="left" type="monotone" dataKey="effT0"
-                                                            name="Netto-Transferbilanz 2026" stroke="var(--steel)"
+                                                            name={adjustSV ? "Netto-Abgabenlast 2026" : "Netto-Transferbilanz 2026"} stroke="var(--steel)"
                                                             strokeWidth={2} dot={false} isAnimationActive={false} />
                                                         <Line yAxisId="left" type="monotone" dataKey="effT1"
-                                                            name="Netto-Transferbilanz 2028" stroke="var(--gold)"
+                                                            name={adjustSV ? "Netto-Abgabenlast 2028" : "Netto-Transferbilanz 2028"} stroke="var(--gold)"
                                                             strokeWidth={2} dot={false} isAnimationActive={false} />
                                                         <Line yAxisId="right" type="monotone" dataKey="avgT0"
                                                             name="Ø-Steuersatz 2026" stroke="var(--steel)"
@@ -983,10 +1068,10 @@ export default function SteuerreformRechner() {
                                         </LineChart>
                                     </ResponsiveContainer>
                                     <div className="sr-chart-note">
-                                        Unterhalb der Nulllinie übersteigt das Kindergeld die tarifliche Steuer – die
-                                        Familie erhält per saldo mehr, als sie zahlt (markiert als „Kindergeld"-Bereich,
-                                        keine negative Steuer). Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin
-                                        auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Transferbilanz.
+                                        {adjustSV ? 
+                                            "Unterhalb der Nulllinie übersteigt das Kindergeld die Abgaben (Steuer + SV) – die Familie erhält per saldo mehr, als sie zahlt. Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Abgabenlast." :
+                                            "Unterhalb der Nulllinie übersteigt das Kindergeld die tarifliche Steuer – die Familie erhält per saldo mehr, als sie zahlt (markiert als „Kindergeld\"-Bereich, keine negative Steuer). Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Transferbilanz."
+                                        }
                                     </div>
                                 </div>
 
@@ -1005,9 +1090,9 @@ export default function SteuerreformRechner() {
                                             <td>{eur0(current.wkT1)}</td>
                                         </tr>
                                         <tr>
-                                            <td>Sozialversicherung (AN, abzugsfähig, unverändert)</td>
-                                            <td>{eur0(current.sa)}</td>
-                                            <td>{eur0(current.sa)}</td>
+                                            <td>Sozialversicherung (AN, abzugsfähig{adjustSV ? "" : ", unverändert"})</td>
+                                            <td>{eur0(current.saT0)}</td>
+                                            <td>{eur0(current.saT1)}</td>
                                         </tr>
                                         <tr>
                                             <td>zu versteuerndes Einkommen</td>
@@ -1029,8 +1114,22 @@ export default function SteuerreformRechner() {
                                             <td>{eur0(current.effT0)}</td>
                                             <td>{eur0(current.effT1)}</td>
                                         </tr>
+                                        {adjustSV && (
+                                            <>
+                                                <tr>
+                                                    <td>Sozialabgaben gesamt (Arbeitnehmer)</td>
+                                                    <td>{eur0(current.svTotalT0)}</td>
+                                                    <td>{eur0(current.svTotalT1)}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Reales Haushalts-Nettoeinkommen</td>
+                                                    <td>{eur0(current.nettoT0)}</td>
+                                                    <td>{eur0(current.nettoT1)}</td>
+                                                </tr>
+                                            </>
+                                        )}
                                         <tr className="sr-highlight">
-                                            <td>Entlastung ./. Jahr</td>
+                                            <td>{adjustSV ? "Netto-Entlastung gesamt / Jahr" : "Entlastung ./. Jahr"}</td>
                                             <td colSpan={2}>{eur0(current.entlastung)}</td>
                                         </tr>
                                     </tbody>
@@ -1051,8 +1150,7 @@ export default function SteuerreformRechner() {
                                     hälftige Freibetrag, wie gesetzlich vorgesehen.</li>
                                 <li><b>Sozialversicherung:</b> reale Beiträge zu Renten-, Arbeitslosen-, Kranken- und
                                     Pflegeversicherung, getrennt für jede Person und jeweils bis zur eigenen
-                                    Beitragsbemessungsgrenze gedeckelt (69.750&nbsp;€ KV/PV, 101.400&nbsp;€ RV/ALV,
-                                    2026). Der Pflegeversicherungsbeitrag berücksichtigt die Kinderzahl. Als
+                                    Beitragsbemessungsgrenze gedeckelt. {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800&nbsp;€ KV/PV, 104.400&nbsp;€ RV/ALV), andernfalls die Werte von 2026 (69.750&nbsp;€ KV/PV, 101.400&nbsp;€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750&nbsp;€ KV/PV, 101.400&nbsp;€ RV/ALV)."} Der Pflegeversicherungsbeitrag berücksichtigt die Kinderzahl. Als
                                     Sonderausgaben angesetzt: Renten- und Pflegebeitrag voll,
                                     Krankenversicherungsbeitrag zu 96&nbsp;%.</li>
                             </ul>

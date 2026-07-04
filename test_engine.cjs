@@ -140,6 +140,26 @@ module.exports = {
         failed++;
     }
 
+    // --- TESTFALL 5: SOZIALVERSICHERUNGS-ANPASSUNG 2027 ---
+    try {
+        const sv2027High = engine.calcSVBeitrag(120000, 2, true);
+        const expectedMaxRV2027 = 104400 * 0.093;
+        const expectedMaxKV2027 = 76800 * 0.0875;
+        
+        assert("2027 Rentenbeitrag gedeckelt an BBG (104.400 €)", Math.abs(sv2027High.rv - expectedMaxRV2027) < 0.01, `Erwartet ${expectedMaxRV2027}, erhalten ${sv2027High.rv}`);
+        assert("2027 Krankenbeitrag gedeckelt an BBG (76.800 €)", Math.abs(sv2027High.kv - expectedMaxKV2027) < 0.01, `Erwartet ${expectedMaxKV2027}, erhalten ${sv2027High.kv}`);
+
+        // Vergleiche Entlastung für Single mit 100k Brutto mit und ohne SV-Anpassung
+        const resNoSV = engine.calculateNetRelief(100000, 0, 0, 0, 0, "single", false);
+        const resWithSV = engine.calculateNetRelief(100000, 0, 0, 0, 0, "single", true);
+        
+        assert("SV-Anpassung mindert Netto-Entlastung bei 100k Brutto", resWithSV.entlastung < resNoSV.entlastung, `Entlastung ohne SV: ${resNoSV.entlastung.toFixed(2)} €, mit SV: ${resWithSV.entlastung.toFixed(2)} €`);
+        assert("SV-Gesamtabgaben 2028 sind höher bei adjustSV", resWithSV.svTotalT1 > resWithSV.svTotalT0, `SV 2026: ${resWithSV.svTotalT0.toFixed(2)} €, SV 2028: ${resWithSV.svTotalT1.toFixed(2)} €`);
+    } catch (e) {
+        console.error("Fehler in Testfall 5:", e);
+        failed++;
+    }
+
     console.log("====================================================");
     if (failed === 0) {
         console.log(`🎉 ALLE ${passed} TESTS ERFOLGREICH BESTANDEN!`);
