@@ -308,13 +308,35 @@ export default function SteuerreformRechner() {
   // einem echten Resize-Event neu – z.B. auswertbar durch das Ziehen eines
   // Reglers. Ein einmaliges, kurz verzögertes Resize-Event nach dem Mount
   // erzwingt die korrekte Neuvermessung, ohne dass man interagieren muss.
+  const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+
   useEffect(() => {
-    const t = setTimeout(() => window.dispatchEvent(new Event("resize")), 80);
-    return () => clearTimeout(t);
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    // Einmaliges verzögertes Resize-Event nach dem Mount erzwingt korrekte Responsive-Messung
+    const t = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+      setWindowWidth(window.innerWidth);
+    }, 80);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(t);
+    };
   }, []);
+
+  const xAxisTicks = useMemo(() => {
+    if (windowWidth > 1000) {
+      return [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000, 160000, 170000, 180000, 190000, 200000];
+    } else if (windowWidth > 600) {
+      return [25000, 50000, 75000, 100000, 125000, 150000, 175000, 200000];
+    } else {
+      return [50000, 100000, 150000, 200000];
+    }
+  }, [windowWidth]);
 
   const verheiratet = familienstand === "verheiratet";
   const bruttoAktuell = brutto1 + (verheiratet ? brutto2 : 0);
+  const bruttoAktuellKey = Math.min(200000, Math.max(2000, Math.round(bruttoAktuell / 2000) * 2000));
   const splitRatio = bruttoAktuell > 0 ? brutto1 / bruttoAktuell : 1;
 
   const chartData = useMemo(() => {
@@ -347,11 +369,39 @@ export default function SteuerreformRechner() {
     return points;
   }, [km1, km2, kids, splitRatio, familienstand, adjustSV]);
 
-  // Letzter Bruttowert, an dem die Netto-Transferbilanz noch negativ ist –
-  // d.h. das Kindergeld übersteigt die tarifliche Steuer noch vollständig.
-  // Bestimmt die Breite des "Kindergeld"-Blocks in Grafik 2.
-  const kgGrenzeT0 = chartData.find((p) => p.effT0 >= 0)?.brutto ?? 200000;
-  const kgGrenzeT1 = chartData.find((p) => p.effT1 >= 0)?.brutto ?? 200000;
+
+  // Steuerliche Freibeträge (Bausteine) für 2026
+  const adultBase = (familienstand === "verheiratet")
+    ? (2 * (11784 + 1230 + 36))
+    : (11784 + 1230 + 36);
+
+  const aeEntlastung = (familienstand === "single" && kids > 0)
+    ? (4260 + (kids - 1) * 240)
+    : 0;
+
+
+
+  // Umrechnung von zvE-Freibeträgen in ungefähre Brutto-Grenzwerte
+  // unter Berücksichtigung von ca. 20% abzugsfähigen Sozialabgaben (Vorsorgeaufwendungen)
+  const limit2 = (adultBase + aeEntlastung) / 0.80;
+
+  // Recharts Kategorie-Schlüssel (müssen exakt in den Chart-Daten enthalten sein)
+  const limit2Key = chartData.find(d => d.brutto >= limit2)?.brutto ?? limit2;
+  const yPoint = chartData.find(d => d.effT0 >= 0)?.brutto ?? 68000;
+
+  // 2028 Freibeträge zur Ermittlung des Steuerbeginns und der Nettozahler-Schwelle 2028
+  const adultBase2028 = (familienstand === "verheiratet")
+    ? (2 * (12828 + 1430 + 36))
+    : (12828 + 1430 + 36);
+
+  const aeEntlastung2028 = (familienstand === "single" && kids > 0)
+    ? (4260 + (kids - 1) * 240)
+    : 0;
+
+  const taxFreeLimit2028 = (adultBase2028 + aeEntlastung2028) / 0.80;
+  const onset2028Key = chartData.find(d => d.brutto >= taxFreeLimit2028)?.brutto ?? 2000;
+  const netTaxOnset2028 = chartData.find(d => d.effT1 >= 0)?.brutto ?? 200000;
+
 
   const current = useMemo(
     () => calculateNetRelief(brutto1, verheiratet ? brutto2 : 0, km1, km2, kids, familienstand, adjustSV),
@@ -392,7 +442,7 @@ export default function SteuerreformRechner() {
                                      color: var(--ink);
                                      padding: 28px;
                                      border-radius: 4px;
-                                     max-width: 1180px;
+                                     max-width: 1400px;
                                      margin: 0 auto;
                                      box-sizing: border-box;
                                      box-shadow: 0 10px 30px rgba(45, 60, 75, 0.04);
@@ -458,11 +508,11 @@ export default function SteuerreformRechner() {
                                      line-height: 1.5;
                                  }
 
-                                .sr-grid {
-                                    display: grid;
-                                    grid-template-columns: 250px minmax(0, 1fr);
-                                    gap: 22px;
-                                }
+                                 .sr-grid {
+                                     display: grid;
+                                     grid-template-columns: 300px minmax(0, 1fr);
+                                     gap: 22px;
+                                 }
 
                                 @media (max-width: 760px) {
                                     .sr-grid {
@@ -911,99 +961,86 @@ export default function SteuerreformRechner() {
                             <div>
                                 <div className="sr-chart-wrap">
                                     <div className="sr-legend">
-                                        <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--c-stadt)" }} /> Städter (Referenz, 2 Kinder)</span>
-                                        <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--c-vorstadt)" }} /> Vorstadt (Referenz, 2
-                                            Kinder)</span>
-                                        <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--c-land)" }} /> Land (Referenz, 2 Kinder)</span>
-                                        <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--gold)" , height: "3px" }} /> Eigene Berechnung,
-                                            absolut € ({kids} Kind{kids === 1 ? "" : "er"})</span>
-                                        <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--turkis)" , height: "2px" ,
-                                                borderTop: "2px dashed var(--turkis)" }} /> Eigene Berechnung, relativ %
-                                            (rechte Achse)</span>
-                                        <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--turkis)" , opacity: 0.3, height: "10px" , borderRadius:
-                                                0 }} /> Kindergeld-Erhöhung ({eur0(Math.max(0, current.kgT1 -
-                                            current.kgT0))}, unabhängig vom Einkommen)</span>
-                                    </div>
-                                    <ResponsiveContainer width="100%" height={360}>
-                                        <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
-                                            <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
-                                            <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}k`}
-                                                stroke="var(--ink-soft)"
-                                                tick={{ fontFamily: "IBM Plex Mono", fontSize: 11 }}
-                                                label={{ value: "Haushaltsbrutto (€)", position: "insideBottom", offset:
-                                                -4, fontSize: 11, fill: "var(--ink-soft)" }}
-                                                />
-                                                <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
-                                                    fontFamily: "IBM Plex Mono" , fontSize: 11 }}
-                                                    tickFormatter={axisEuro} width={56} />
-                                                <YAxis yAxisId="right" orientation="right" stroke="var(--ink-soft)" tick={{
-                                                    fontFamily: "IBM Plex Mono" , fontSize: 11 }} tickFormatter={(v)=>
-                                                    `${v}%`}
-                                                    width={44}
-                                                    domain={[0, 100]}
-                                                    />
-                                                    <Tooltip labelFormatter={(v)=> eur0(v)}
-                                                        contentStyle={{ fontFamily: "IBM Plex Mono", fontSize: 12,
-                                                        border: "1px solid var(--line)" }}
-                                                        formatter={(v, name) => [name === "Eigene Berechnung, relativ %"
-                                                        ? `${v}%` : eur0(v), name]}
-                                                        filterNull={false}
-                                                        itemSorter={() => 0}
-                                                        content={({ active, payload, label }) => {
-                                                        if (!active || !payload) return null;
-                                                        const rows = payload.filter((p) => p.dataKey === "eigen" ||
-                                                        p.dataKey === "eigenPct");
-                                                        if (rows.length === 0) return null;
-                                                        return (
-                                                        <div style={{ fontFamily: "IBM Plex Mono" , fontSize: 12,
-                                                            border: "1px solid var(--line)" , background: "var(--paper)"
-                                                            , padding: "8px 10px" }}>
-                                                            <div style={{ marginBottom: 4 }}>{eur0(label)}</div>
-                                                            {rows.map((r) => (
-                                                            <div key={r.dataKey} style={{ color: r.color }}>
-                                                                {r.dataKey === "eigenPct" ? "Eigene Berechnung, relativ"
-                                                                : "Eigene Berechnung, absolut"}: {r.dataKey ===
-                                                                "eigenPct" ? `${r.value}%` : eur0(r.value)}
-                                                            </div>
-                                                            ))}
-                                                        </div>
-                                                        );
-                                                        }}
-                                                        />
-                                                        <ReferenceLine yAxisId="left" x={bruttoAktuell}
-                                                            stroke="var(--ink-soft)" strokeDasharray="3 3"
-                                                            strokeWidth={1} />
-                                                        <ReferenceArea yAxisId="left" y1={0} y2={Math.max(0,
-                                                            current.kgT1 - current.kgT0)} fill="var(--turkis)"
-                                                            fillOpacity={0.12} stroke="var(--turkis)" strokeOpacity={0.4}
-                                                            strokeDasharray="2 2" ifOverflow="extendDomain" />
-                                                        <Line yAxisId="left" type="monotone" dataKey="stadt"
-                                                            name="Städter (Referenz)" stroke="var(--c-stadt)"
-                                                            strokeWidth={1.5} dot={false} strokeDasharray="4 3"
-                                                            isAnimationActive={false} />
-                                                        <Line yAxisId="left" type="monotone" dataKey="vorstadt"
-                                                            name="Vorstadt (Referenz)" stroke="var(--c-vorstadt)"
-                                                            strokeWidth={1.5} dot={false} strokeDasharray="4 3"
-                                                            isAnimationActive={false} />
-                                                        <Line yAxisId="left" type="monotone" dataKey="land"
-                                                            name="Land (Referenz)" stroke="var(--c-land)"
-                                                            strokeWidth={1.5} dot={false} strokeDasharray="4 3"
-                                                            isAnimationActive={false} />
-                                                        <Line yAxisId="left" type="monotone" dataKey="eigen"
-                                                            name="Eigene Berechnung, absolut" stroke="var(--gold)"
-                                                            strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                                                        <Line yAxisId="right" type="monotone" dataKey="eigenPct"
-                                                            name="Eigene Berechnung, relativ" stroke="var(--turkis)"
-                                                            strokeWidth={1.75} dot={false} strokeDasharray="2 2"
-                                                            connectNulls={false} isAnimationActive={false} />
-                                        </LineChart>
-                                    </ResponsiveContainer>
+                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                 background: "var(--c-stadt)" }} /> Stadt</span>
+                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                 background: "var(--c-vorstadt)" }} /> Vorstadt</span>
+                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                 background: "var(--c-land)" }} /> Land</span>
+                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                 background: "var(--gold)" , height: "3px" }} /> Deine Daten (absolut)</span>
+                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                 background: "var(--turkis)" , opacity: 0.3, height: "10px" , borderRadius:
+                                                 0 }} /> Kindergeld-Erhöhung ({eur0(Math.max(0, current.kgT1 - current.kgT0))})</span>
+                                     </div>
+                                     <ResponsiveContainer width="100%" height={360}>
+                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
+                                             <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
+                                             <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}`}
+                                                 stroke="var(--ink-soft)"
+                                                 tick={{ fontFamily: "IBM Plex Mono", fontSize: 11 }}
+                                                 ticks={xAxisTicks}
+                                                 label={{ value: "Haushaltsbrutto (in Tsd. €)", position: "insideBottom", offset:
+                                                 -4, fontSize: 11, fill: "var(--ink-soft)" }}
+                                                 />
+                                                 <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
+                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }}
+                                                     tickFormatter={axisEuro} width={56} />
+                                                 <YAxis yAxisId="right" orientation="right" width={44} stroke="transparent" tick={false} />
+                                                     <Tooltip labelFormatter={(v)=> eur0(v)}
+                                                         contentStyle={{ fontFamily: "IBM Plex Mono", fontSize: 12,
+                                                         border: "1px solid var(--line)" }}
+                                                         formatter={(v, name) => [eur0(v), name]}
+                                                         filterNull={false}
+                                                         itemSorter={() => 0}
+                                                         content={({ active, payload, label }) => {
+                                                         if (!active || !payload) return null;
+                                                         const rows = payload.filter((p) => p.dataKey === "eigen");
+                                                         if (rows.length === 0) return null;
+                                                         return (
+                                                         <div style={{ fontFamily: "IBM Plex Mono" , fontSize: 12,
+                                                             border: "1px solid var(--line)" , background: "var(--paper)"
+                                                             , padding: "8px 10px" }}>
+                                                             <div style={{ marginBottom: 4 }}>Brutto: {eur0(label)}</div>
+                                                             {rows.map((r) => (
+                                                             <div key={r.dataKey} style={{ color: r.color }}>
+                                                                 Deine Entlastung: {eur0(r.value)}
+                                                             </div>
+                                                             ))}
+                                                         </div>
+                                                         );
+                                                         }}
+                                                         />
+                                                         <ReferenceLine yAxisId="left" x={bruttoAktuellKey}
+                                                             stroke="var(--gold)" strokeDasharray="3 3"
+                                                             strokeWidth={1.5} />
+                                                         <ReferenceArea yAxisId="left" y1={0} y2={Math.max(0,
+                                                             current.kgT1 - current.kgT0)} fill="var(--turkis)"
+                                                             fillOpacity={0.12} stroke="var(--turkis)" strokeOpacity={0.4}
+                                                             strokeDasharray="2 2" ifOverflow="extendDomain" />
+                                                         <Line yAxisId="left" type="monotone" dataKey="stadt"
+                                                             name="Stadt" stroke="var(--c-stadt)"
+                                                             strokeWidth={1.5} dot={false} strokeDasharray="4 3"
+                                                             isAnimationActive={false} />
+                                                         <Line yAxisId="left" type="monotone" dataKey="vorstadt"
+                                                             name="Vorstadt" stroke="var(--c-vorstadt)"
+                                                             strokeWidth={1.5} dot={false} strokeDasharray="4 3"
+                                                             isAnimationActive={false} />
+                                                         <Line yAxisId="left" type="monotone" dataKey="land"
+                                                             name="Land" stroke="var(--c-land)"
+                                                             strokeWidth={1.5} dot={false} strokeDasharray="4 3"
+                                                             isAnimationActive={false} />
+                                                         <Line yAxisId="left" type="monotone" dataKey="eigen"
+                                                             name="Deine Daten, absolut" stroke="var(--gold)"
+                                                             strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                                         </LineChart>
+                                     </ResponsiveContainer>
+                                     <div className="sr-chart-note" style={{ marginTop: "12px", borderTop: "1px solid var(--line)", paddingTop: "8px" }}>
+                                         <strong>Erklärung der Referenz-Modellkurven (je 2 Kinder):</strong><br />
+                                         • <strong>Stadt:</strong> Kurze Arbeitswege (je 5 km). Die Fahrtkosten liegen unter dem Werbungskosten-Pauschbetrag – diese Familien profitieren voll von dessen Erhöhung.<br />
+                                         • <strong>Vorstadt:</strong> Ein Partner pendelt weit (30 km), ein Partner kurz (5 km).<br />
+                                         • <strong>Land:</strong> Beide Partner pendeln weit (je 25 km). Die tatsächlichen Fahrtkosten liegen über dem Pauschbetrag – die Erhöhung des Pauschbetrags greift hier nicht (keine zusätzliche Entlastung).
+                                     </div>
                                 </div>
 
                                 <div className="sr-chart-wrap" style={{ marginTop: 18 }}>
@@ -1023,10 +1060,10 @@ export default function SteuerreformRechner() {
                                     <ResponsiveContainer width="100%" height={320}>
                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
                                             <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
-                                            <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}k`}
+                                            <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}`} ticks={xAxisTicks}
                                                 stroke="var(--ink-soft)"
                                                 tick={{ fontFamily: "IBM Plex Mono", fontSize: 11 }}
-                                                label={{ value: "Haushaltsbrutto (€)", position: "insideBottom", offset:
+                                                label={{ value: "Haushaltsbrutto (in Tsd. €)", position: "insideBottom", offset:
                                                 -4, fontSize: 11, fill: "var(--ink-soft)" }}
                                                 />
                                                 <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
@@ -1047,46 +1084,85 @@ export default function SteuerreformRechner() {
                                                         contentStyle={{ fontFamily: "IBM Plex Mono", fontSize: 12,
                                                         border: "1px solid var(--line)" }}
                                                         />
-                                                        <ReferenceLine yAxisId="left" x={bruttoAktuell}
-                                                            stroke="var(--ink-soft)" strokeDasharray="3 3"
-                                                            strokeWidth={1} />
-                                                        <ReferenceLine yAxisId="left" y={0} stroke="var(--ink)"
-                                                            strokeWidth={1} />
-                                                        <ReferenceArea yAxisId="left" x1={0} x2={kgGrenzeT0} y1={-14000}
-                                                            y2={0} fill="var(--steel)" fillOpacity={0.12} stroke="none"
-                                                            ifOverflow="extendDomain">
-                                                            <Label value={adjustSV ? "KG Überschuss 2026" : "Kindergeld 2026"} position="insideBottomLeft"
-                                                                fill="var(--steel)" fontFamily="IBM Plex Mono"
-                                                                fontSize={10} />
-                                                        </ReferenceArea>
-                                                        <ReferenceArea yAxisId="left" x1={0} x2={kgGrenzeT1} y1={-14000}
-                                                            y2={0} fill="var(--turkis)" fillOpacity={0.12} stroke="none"
-                                                            ifOverflow="extendDomain">
-                                                            <Label value={adjustSV ? "KG Überschuss 2028" : "Kindergeld 2028"} position="insideTopLeft"
-                                                                fill="var(--turkis)" fontFamily="IBM Plex Mono"
-                                                                fontSize={10} />
-                                                        </ReferenceArea>
-                                                        <Line yAxisId="left" type="monotone" dataKey="effT0"
-                                                            name={adjustSV ? "Netto-Abgabenlast 2026" : "Netto-Transferbilanz 2026"} stroke="var(--steel)"
-                                                            strokeWidth={2} dot={false} isAnimationActive={false} />
-                                                        <Line yAxisId="left" type="monotone" dataKey="effT1"
-                                                            name={adjustSV ? "Netto-Abgabenlast 2028" : "Netto-Transferbilanz 2028"} stroke="var(--gold)"
-                                                            strokeWidth={2} dot={false} isAnimationActive={false} />
-                                                        <Line yAxisId="right" type="monotone" dataKey="avgT0"
-                                                            name="Ø-Steuersatz 2026" stroke="var(--steel)"
-                                                            strokeWidth={1.5} dot={false} strokeDasharray="2 2"
-                                                            isAnimationActive={false} />
-                                                        <Line yAxisId="right" type="monotone" dataKey="avgT1"
-                                                            name="Ø-Steuersatz 2028" stroke="var(--turkis)"
-                                                            strokeWidth={1.5} dot={false} strokeDasharray="2 2"
-                                                            isAnimationActive={false} />
+                                                        <ReferenceLine yAxisId="left" x={bruttoAktuellKey}
+                                                            stroke="var(--gold)" strokeDasharray="3 3"
+                                                            strokeWidth={1.5} />
+                                                        <ReferenceArea yAxisId="left" x2={limit2Key} y1={adjustSV ? -7000 : -7000} y2={adjustSV ? 80000 : 40000}
+                                                             fill="rgba(45, 60, 75, 0.16)" stroke="none"
+                                                             ifOverflow="extendDomain">
+                                                             <Label value="Steuerfrei" position="insideTopLeft"
+                                                                 fill="rgba(45, 60, 75, 0.85)" fontFamily="IBM Plex Mono"
+                                                                 fontSize={9} />
+                                                         </ReferenceArea>
+                                                         {kids > 0 && (
+                                                             <ReferenceArea yAxisId="left" x1={limit2Key} x2={yPoint} y1={adjustSV ? -7000 : -7000} y2={adjustSV ? 80000 : 40000}
+                                                                 fill="rgba(45, 60, 75, 0.05)" stroke="none"
+                                                                 ifOverflow="extendDomain">
+                                                                 <Label value="Nettoempfänger" position="insideTopLeft"
+                                                                     fill="rgba(45, 60, 75, 0.65)" fontFamily="IBM Plex Mono"
+                                                                     fontSize={9} />
+                                                             </ReferenceArea>
+                                                         )}
+                                                         <ReferenceArea yAxisId="left" x1={yPoint} x2={200000} y1={adjustSV ? -7000 : -7000} y2={adjustSV ? 80000 : 40000}
+                                                             fill="transparent" stroke="none"
+                                                             ifOverflow="extendDomain">
+                                                             <Label value="Nettozahler" position="insideTopLeft"
+                                                                 fill="rgba(45, 60, 75, 0.65)" fontFamily="IBM Plex Mono"
+                                                                 fontSize={9} />
+                                                         </ReferenceArea>
+                                                         <ReferenceLine yAxisId="left" y={0} stroke="var(--ink)" strokeWidth={1} />
+                                                         <Line yAxisId="left" type="monotone" dataKey="effT0"
+                                                             name={adjustSV ? "Netto-Abgabenlast 2026" : "Netto-Transferbilanz 2026"} stroke="var(--steel)"
+                                                             strokeWidth={2} dot={false} isAnimationActive={false} />
+                                                         <Line yAxisId="left" type="monotone" dataKey="effT1"
+                                                             name={adjustSV ? "Netto-Abgabenlast 2028" : "Netto-Transferbilanz 2028"} stroke="var(--gold)"
+                                                             strokeWidth={2} dot={false} isAnimationActive={false} />
+                                                         <Line yAxisId="right" type="monotone" dataKey="avgT0"
+                                                             name="Ø-Steuersatz 2026" stroke="var(--steel)"
+                                                             strokeWidth={1.5} dot={false} strokeDasharray="2 2"
+                                                             isAnimationActive={false} />
+                                                         <Line yAxisId="right" type="monotone" dataKey="avgT1"
+                                                             name="Ø-Steuersatz 2028" stroke="var(--turkis)"
+                                                             strokeWidth={1.5} dot={false} strokeDasharray="2 2"
+                                                             isAnimationActive={false} />
                                         </LineChart>
                                     </ResponsiveContainer>
                                     <div className="sr-chart-note">
-                                        {adjustSV ? 
-                                            "Unterhalb der Nulllinie übersteigt das Kindergeld die Abgaben (Steuer + SV) – die Familie erhält per saldo mehr, als sie zahlt. Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Abgabenlast." :
-                                            "Unterhalb der Nulllinie übersteigt das Kindergeld die tarifliche Steuer – die Familie erhält per saldo mehr, als sie zahlt (markiert als „Kindergeld\"-Bereich, keine negative Steuer). Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Transferbilanz."
-                                        }
+                                        <div>
+                                            {adjustSV ? 
+                                                "Unterhalb der Nulllinie übersteigt das Kindergeld die Abgaben (Steuer + SV) – die Familie erhält per saldo mehr, als sie zahlt. Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Abgabenlast." :
+                                                "Unterhalb der Nulllinie übersteigt das Kindergeld die tarifliche Steuer – die Familie erhält per saldo mehr, als sie zahlt (markiert als „Kindergeld\"-Bereich, keine negative Steuer). Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Transferbilanz."
+                                            }
+                                        </div>
+                                        <div style={{ marginTop: "6px", borderTop: "1px dashed var(--line)", paddingTop: "6px" }}>
+                                            <strong>Hintergrund-Zonen (2026):</strong>{" "}
+                                            <span><b>Steuerfrei:</b> bis {eur0(limit2)}</span>
+                                            {kids > 0 ? (
+                                                <>
+                                                    {" "}· <span><b>Nettoempfänger:</b> bis {eur0(yPoint)}</span>
+                                                    {" "}· <span><b>Nettozahler:</b> ab {eur0(yPoint)}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {" "}· <span><b>Nettozahler:</b> ab {eur0(limit2)}</span>
+                                                </>
+                                            )}
+                                            .
+                                        </div>
+                                        <div style={{ marginTop: "4px" }}>
+                                            <strong>Entwicklung im Reformjahr 2028:</strong>{" "}
+                                            <span><b>Steuerbeginn 2028:</b> erst ab {eur0(onset2028Key)} (+{eur0(Math.max(0, onset2028Key - limit2))} steuerfrei)</span>
+                                            {kids > 0 ? (
+                                                <>
+                                                    {" "}· <span><b>Nettozahler 2028:</b> ab {eur0(netTaxOnset2028)}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {" "}· <span><b>Nettozahler 2028:</b> ab {eur0(onset2028Key)}</span>
+                                                </>
+                                            )}
+                                            .
+                                        </div>
                                     </div>
                                     <table className="sr-table">
                                         <thead>
