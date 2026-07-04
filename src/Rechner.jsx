@@ -294,6 +294,15 @@ const REF_PROFILES = [
 ];
 const REF_KIDS = 2;
 
+const BMF_FAMILIES = [
+  { id: "1", name: "Pflegekraft & Busfahrer (je 2.800 €)", familienstand: "verheiratet", brutto1: 33600, brutto2: 33600, kids: 2, km1: 0, km2: 0 },
+  { id: "2", name: "Erzieher & Elektrikerin (je 3.200 €)", familienstand: "verheiratet", brutto1: 38400, brutto2: 38400, kids: 2, km1: 0, km2: 0 },
+  { id: "3", name: "Lehrerin & Ingenieur (je 5.000 €)", familienstand: "verheiratet", brutto1: 60000, brutto2: 60000, kids: 2, km1: 0, km2: 0 },
+  { id: "4", name: "Alleinerziehende Pflegekraft (2.800 €)", familienstand: "single", brutto1: 33600, brutto2: 0, kids: 2, km1: 0, km2: 0 },
+  { id: "5", name: "Alleinerziehende Erzieherin (3.200 €)", familienstand: "single", brutto1: 38400, brutto2: 0, kids: 2, km1: 0, km2: 0 },
+  { id: "6", name: "Alleinerziehender Lehrer (5.000 €)", familienstand: "single", brutto1: 60000, brutto2: 0, kids: 2, km1: 0, km2: 0 }
+];
+
 export default function SteuerreformRechner() {
   const [familienstand, setFamilienstand] = useState("verheiratet");
   const [brutto1, setBrutto1] = useState(34000);
@@ -302,6 +311,32 @@ export default function SteuerreformRechner() {
   const [km2, setKm2] = useState(8);
   const [kids, setKids] = useState(2);
   const [adjustSV, setAdjustSV] = useState(false);
+
+  const activeFamilyId = useMemo(() => {
+    const match = BMF_FAMILIES.find(f => 
+      f.familienstand === familienstand &&
+      f.brutto1 === brutto1 &&
+      (familienstand === "single" || f.brutto2 === brutto2) &&
+      f.kids === kids &&
+      f.km1 === km1 &&
+      (familienstand === "single" || f.km2 === km2)
+    );
+    return match ? match.id : "";
+  }, [familienstand, brutto1, brutto2, kids, km1, km2]);
+
+  const handleFamilyChange = (e) => {
+    const val = e.target.value;
+    if (!val) return;
+    const fam = BMF_FAMILIES.find(f => f.id === val);
+    if (fam) {
+      setFamilienstand(fam.familienstand);
+      setBrutto1(fam.brutto1);
+      setBrutto2(fam.brutto2);
+      setKids(fam.kids);
+      setKm1(fam.km1);
+      setKm2(fam.km2);
+    }
+  };
 
   // ResponsiveContainer misst seine Breite beim allerersten Rendern in
   // Grid-Layouts manchmal falsch (0px) und zeichnet die Linien erst nach
@@ -659,6 +694,28 @@ export default function SteuerreformRechner() {
                                      font-weight: 500;
                                  }
 
+                                 .sr-select {
+                                     width: 100%;
+                                     padding: 8px 12px;
+                                     border: 1px solid var(--line);
+                                     background: var(--paper);
+                                     font-family: 'IBM Plex Serif', serif;
+                                     font-size: 13px;
+                                     color: var(--ink);
+                                     border-radius: 2px;
+                                     outline: none;
+                                     cursor: pointer;
+                                 }
+
+                                 .sr-select option {
+                                     font-family: 'IBM Plex Serif', serif;
+                                     font-size: 13px;
+                                 }
+
+                                 .sr-select:focus {
+                                     border-color: var(--steel);
+                                 }
+
                                  .sr-readout {
                                     margin-top: 18px;
                                     padding-top: 16px;
@@ -866,6 +923,23 @@ export default function SteuerreformRechner() {
                         <div className="sr-grid">
                             <div className="sr-panel">
                                 <p className="sr-panel-title">Eigene Eingaben</p>
+
+                                <div className="sr-field">
+                                    <label htmlFor="bmf-select">BMF-Beispielfamilie laden</label>
+                                    <select
+                                        id="bmf-select"
+                                        className="sr-select"
+                                        value={activeFamilyId}
+                                        onChange={handleFamilyChange}
+                                    >
+                                        <option value="">-- Eigene Werte (Freie Eingabe) --</option>
+                                        {BMF_FAMILIES.map(f => (
+                                            <option key={f.id} value={f.id}>
+                                                {f.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
                                 <div className="sr-field">
                                     <label>Familienstand</label>
