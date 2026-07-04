@@ -402,13 +402,8 @@ export default function SteuerreformRechner() {
     }
   }, [windowWidth, isSimple, verheiratet]);
 
-  const sliderMax1 = isSimple
-    ? Math.min(SIMPLE_PER, SIMPLE_MAX - (verheiratet ? brutto2 : 0))
-    : 150000;
-
-  const sliderMax2 = isSimple
-    ? Math.min(SIMPLE_PER, SIMPLE_MAX - brutto1)
-    : 150000;
+  const sliderMax1 = isSimple ? SIMPLE_PER : 150000;
+  const sliderMax2 = isSimple ? SIMPLE_PER : 150000;
 
   const handleBrutto1Change = (val) => {
     setBrutto1(val);
@@ -435,7 +430,7 @@ export default function SteuerreformRechner() {
   const bruttoAktuellKey = Math.min(200000, Math.max(2000, Math.round(bruttoAktuell / 2000) * 2000));
   const splitRatio = bruttoAktuell > 0 ? brutto1 / bruttoAktuell : 1;
 
-  const chartData = useMemo(() => {
+  const rawChartData = useMemo(() => {
     const points = [];
     const step = 2000;
     for (let b = 0; b <= 200000; b += step) {
@@ -464,6 +459,10 @@ export default function SteuerreformRechner() {
     }
     return points;
   }, [km1, km2, kids, splitRatio, familienstand, adjustSV]);
+
+  const chartData = useMemo(() => {
+    return rawChartData.filter(d => d.brutto <= xDomain[1]);
+  }, [rawChartData, xDomain]);
 
 
   // Steuerliche Freibeträge (Bausteine) für 2026
@@ -1138,12 +1137,16 @@ export default function SteuerreformRechner() {
                             <div>
                                 <div className="sr-chart-wrap">
                                     <div className="sr-legend">
-                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                 background: "var(--c-stadt)" }} /> Stadt</span>
-                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                 background: "var(--c-vorstadt)" }} /> Vorstadt</span>
-                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                 background: "var(--c-land)" }} /> Land</span>
+                                         {!isSimple && (
+                                             <>
+                                                 <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                         background: "var(--c-stadt)" }} /> Stadt</span>
+                                                 <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                         background: "var(--c-vorstadt)" }} /> Vorstadt</span>
+                                                 <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                         background: "var(--c-land)" }} /> Land</span>
+                                             </>
+                                         )}
                                          <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
                                                  background: "var(--gold)" , height: "3px" }} /> Deine Daten (absolut)</span>
                                          <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
@@ -1153,7 +1156,7 @@ export default function SteuerreformRechner() {
                                      <ResponsiveContainer width="100%" height={360}>
                                          <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
                                              <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
-                                             <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}`}
+                                             <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`}
                                                  stroke="var(--ink-soft)"
                                                  tick={{ fontFamily: "IBM Plex Mono", fontSize: 11 }}
                                                  ticks={xAxisTicks}
@@ -1195,29 +1198,35 @@ export default function SteuerreformRechner() {
                                                              current.kgT1 - current.kgT0)} fill="var(--turkis)"
                                                              fillOpacity={0.12} stroke="var(--turkis)" strokeOpacity={0.4}
                                                              strokeDasharray="2 2" ifOverflow="extendDomain" />
-                                                         <Line yAxisId="left" type="monotone" dataKey="stadt"
-                                                             name="Stadt" stroke="var(--c-stadt)"
-                                                             strokeWidth={1.5} dot={false} strokeDasharray="4 3"
-                                                             isAnimationActive={false} />
-                                                         <Line yAxisId="left" type="monotone" dataKey="vorstadt"
-                                                             name="Vorstadt" stroke="var(--c-vorstadt)"
-                                                             strokeWidth={1.5} dot={false} strokeDasharray="4 3"
-                                                             isAnimationActive={false} />
-                                                         <Line yAxisId="left" type="monotone" dataKey="land"
-                                                             name="Land" stroke="var(--c-land)"
-                                                             strokeWidth={1.5} dot={false} strokeDasharray="4 3"
-                                                             isAnimationActive={false} />
+                                                         {!isSimple && (
+                                                             <>
+                                                                 <Line yAxisId="left" type="monotone" dataKey="stadt"
+                                                                     name="Stadt" stroke="var(--c-stadt)"
+                                                                     strokeWidth={1.5} dot={false} strokeDasharray="4 3"
+                                                                     isAnimationActive={false} />
+                                                                 <Line yAxisId="left" type="monotone" dataKey="vorstadt"
+                                                                     name="Vorstadt" stroke="var(--c-vorstadt)"
+                                                                     strokeWidth={1.5} dot={false} strokeDasharray="4 3"
+                                                                     isAnimationActive={false} />
+                                                                 <Line yAxisId="left" type="monotone" dataKey="land"
+                                                                     name="Land" stroke="var(--c-land)"
+                                                                     strokeWidth={1.5} dot={false} strokeDasharray="4 3"
+                                                                     isAnimationActive={false} />
+                                                             </>
+                                                         )}
                                                          <Line yAxisId="left" type="monotone" dataKey="eigen"
                                                              name="Deine Daten, absolut" stroke="var(--gold)"
                                                              strokeWidth={2.5} dot={false} isAnimationActive={false} />
                                          </LineChart>
                                      </ResponsiveContainer>
-                                     <div className="sr-chart-note" style={{ marginTop: "12px", borderTop: "1px solid var(--line)", paddingTop: "8px" }}>
-                                         <strong>Erklärung der Referenz-Modellkurven (je 2 Kinder):</strong><br />
-                                         • <strong>Stadt:</strong> Kurze Arbeitswege (je 5 km). Die Fahrtkosten liegen unter dem Werbungskosten-Pauschbetrag – diese Familien profitieren voll von dessen Erhöhung.<br />
-                                         • <strong>Vorstadt:</strong> Ein Partner pendelt weit (30 km), ein Partner kurz (5 km).<br />
-                                         • <strong>Land:</strong> Beide Partner pendeln weit (je 25 km). Die tatsächlichen Fahrtkosten liegen über dem Pauschbetrag – die Erhöhung des Pauschbetrags greift hier nicht (keine zusätzliche Entlastung).
-                                     </div>
+                                     {!isSimple && (
+                                         <div className="sr-chart-note" style={{ marginTop: "12px", borderTop: "1px solid var(--line)", paddingTop: "8px" }}>
+                                             <strong>Erklärung der Referenz-Modellkurven (je 2 Kinder):</strong><br />
+                                             • <strong>Stadt:</strong> Kurze Arbeitswege (je 5 km). Die Fahrtkosten liegen unter dem Werbungskosten-Pauschbetrag – diese Familien profitieren voll von dessen Erhöhung.<br />
+                                             • <strong>Vorstadt:</strong> Ein Partner pendelt weit (30 km), ein Partner kurz (5 km).<br />
+                                             • <strong>Land:</strong> Beide Partner pendeln weit (je 25 km). Die tatsächlichen Fahrtkosten liegen über dem Pauschbetrag – die Erhöhung des Pauschbetrags greift hier nicht (keine zusätzliche Entlastung).
+                                         </div>
+                                     )}
                                 </div>
 
 
