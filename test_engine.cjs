@@ -129,12 +129,12 @@ module.exports = {
     // --- TESTFALL 4: GÜNSTIGERPRÜFUNG FÜR ALLEINERZIEHENDE (SINGLE) ---
     try {
         // 60.000 € Brutto, 1 Kind, Single.
-        // Der Freibetrag (4.878 €) spart bei ca. 27% Steuersatz rund 1.300 € Steuer.
-        // Das halbe Kindergeld beträgt 1.554 €. 
-        // Der Freibetrag sollte günstiger sein!
+        // Mit dem Entlastungsbetrag für Alleinerziehende (§ 24b EStG) von 4.260 €
+        // sinkt das zvE, sodass das halbe Kindergeld (1.554 €) günstiger ist
+        // als die Steuerersparnis durch den halben Kinderfreibetrag (ca. 1.551 €).
         const res = engine.calculateNetRelief(60000, 0, 0, 0, 1, "single");
-        assert("Günstigerprüfung Single 60k (t0 = Kinderfreibetrag)", res.guenstigerT0 === "Kinderfreibetrag", `Erwartet Kinderfreibetrag, erhalten ${res.guenstigerT0}`);
-        assert("Vorteil Single 60k (t0) berücksichtigt verbleibendes Kindergeld", res.vorteilT0 > 3100, `Vorteil sollte > 3100 € sein (Steuersenkung + halbes Kindergeld), erhalten ${res.vorteilT0.toFixed(2)} €`);
+        assert("Günstigerprüfung Single 60k (t0 = Kindergeld)", res.guenstigerT0 === "Kindergeld", `Erwartet Kindergeld, erhalten ${res.guenstigerT0}`);
+        assert("Vorteil Single 60k (t0) berücksichtigt verbleibendes Kindergeld", res.vorteilT0 > 3100, `Vorteil sollte > 3100 € sein (volles Kindergeld von 3108 €), erhalten ${res.vorteilT0.toFixed(2)} €`);
     } catch (e) {
         console.error("Fehler in Testfall 4:", e);
         failed++;

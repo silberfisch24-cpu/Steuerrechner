@@ -45,31 +45,39 @@ function calcTarif(zveHalf, gfb, eck1, eck2) {
   return taxAtEck2 + 0.42 * (zveHalf - eck2);
 }
 
-// t0 = geltendes Recht 2026, t1 = volle Wirkung der Koalitionseinigung ab 2028
+// t0 = geltendes Recht 2026, t2027 = Reformstufe 2027, t1 = Reformstufe 2028 (Koalitionseinigung)
 const PARAMS = {
   t0: {
     pausch: 1230,
     gfb: 12348,
     eck1: 17799,
     eck2: 69879,
-    kgMonat: 259
+    kgMonat: 259,
+    kfbProKind: 9756
+  },
+  t2027: {
+    pausch: 1330,
+    gfb: 12624,
+    eck1: 17800,
+    eck2: 70240,
+    kgMonat: 265,
+    kfbProKind: 10056 // 9756 + 300 €
   },
   t1: {
     pausch: 1430,
     gfb: 12900,
     eck1: 17800,
     eck2: 70600,
-    kgMonat: 272
+    kgMonat: 272,
+    kfbProKind: 10236 // 9756 + 480 €
   },
 };
 
-const KFB_PRO_KIND_T0 = 9756; // Kinderfreibetrag + BEA, Ehepaar, 2026
+// eslint-disable-next-line no-unused-vars
+const KFB_PRO_KIND_T0 = PARAMS.t0.kfbProKind;
+// eslint-disable-next-line no-unused-vars
+const KFB_PRO_KIND_T1 = PARAMS.t1.kfbProKind;
 
-// BVerfG-Vorgabe (Existenzminimum des Kindes): KFB kann bei einer KG-Erhöhung
-// nicht konstant bleiben. Konservative Kopplung:
-// KFB steigt um 85% der relativen Kindergeld-Anpassung (259 € -> 272 €, d.h. +5,02% * 0,85).
-const KG_REL_ANSTIEG = PARAMS.t1.kgMonat / PARAMS.t0.kgMonat - 1;
-const KFB_PRO_KIND_T1 = KFB_PRO_KIND_T0 * (1 + 0.85 * KG_REL_ANSTIEG);
 
 // Grenzsteuersatz an der letzten verdienten Einheit (Ableitung der Tarifformel):
 // steigt linear von 14% auf 24%, dann linear von 24% auf 42%, danach konstant 42%.
@@ -146,115 +154,131 @@ function calculateNetRelief(brutto1, brutto2, km1, km2, kids, familienstand, adj
   const realWk1 = calcPendlerkosten(km1);
   const realWk2 = verheiratet ? calcPendlerkosten(km2) : 0;
   
-  const wkT0 = Math.max(PARAMS.t0.pausch, realWk1) + (verheiratet ? Math.max(PARAMS.t0.pausch, realWk2) : 0);
-  const wkT1 = Math.max(PARAMS.t1.pausch, realWk1) + (verheiratet ? Math.max(PARAMS.t1.pausch, realWk2) : 0);
+  // Entlastungsbetrag für Alleinerziehende (§ 24b EStG)
+  const entlastungsbetrag = (!verheiratet && kids > 0) ? (4260 + (kids - 1) * 240) : 0;
+
+  function calcYear(key, use2027Limits) {
+    const pausch = PARAMS[key].pausch;
+    const wk = Math.max(pausch, realWk1) + (verheiratet ? Math.max(pausch, realWk2) : 0);
+    
+    const sv1 = calcSVBeitrag(brutto1, kids, use2027Limits);
+    const sv2 = verheiratet ? calcSVBeitrag(brutto2, kids, use2027Limits) : { rv: 0, alv: 0, kv: 0, pv: 0, sa: 0, total: 0 };
+    const sa = sv1.sa + sv2.sa;
+    
+    const zve = Math.max(0, bruttoGesamt - wk - sa - entlastungsbetrag);
+    const kfb = (verheiratet ? PARAMS[key].kfbProKind : PARAMS[key].kfbProKind / 2) * kids;
+    const kg = PARAMS[key].kgMonat * 12 * kids;
+    
+    const est = incomeTax(zve, PARAMS[key].gfb, PARAMS[key].eck1, PARAMS[key].eck2, verheiratet);
+    const estKfb = incomeTax(Math.max(0, zve - kfb), PARAMS[key].gfb, PARAMS[key].eck1, PARAMS[key].eck2, verheiratet);
+    
+    const kgOffset = (verheiratet ? 1 : 0.5) * kg;
+    const guenstiger = (est - estKfb) > kgOffset ? "Kinderfreibetrag" : "Kindergeld";
+    const vorteil = guenstiger === "Kinderfreibetrag" ? (est - estKfb) + (kg - kgOffset) : kg;
+    
+    const eff_tax = est - vorteil;
+    const svTotal = sv1.total + sv2.total;
+    const eff = adjustSV ? (eff_tax + svTotal) : eff_tax;
+    const netto = bruttoGesamt - svTotal - eff_tax;
+    
+    const realTax = guenstiger === "Kinderfreibetrag" ? estKfb : est;
+    const avg = zve > 0 ? (realTax / zve) * 100 : 0;
+    const grenz = incomeMarginalRate(zve, PARAMS[key].gfb, PARAMS[key].eck1, PARAMS[key].eck2, verheiratet) * 100;
+    
+    return {
+      wk,
+      sa,
+      zve,
+      kfb,
+      kg,
+      est,
+      estKfb,
+      guenstiger,
+      vorteil,
+      eff_tax,
+      svTotal,
+      eff,
+      netto,
+      realTax,
+      avg,
+      grenz
+    };
+  }
+
+  // T0: 2026 (immer 2026 limits, d.h. false)
+  const T0 = calcYear("t0", false);
+  // T2027: 2027 (2027 limits wenn adjustSV aktiv, sonst 2026 limits)
+  const T2027 = calcYear("t2027", adjustSV);
+  // T1: 2028 (2027 limits wenn adjustSV aktiv, sonst 2026 limits)
+  const T1 = calcYear("t1", adjustSV);
   
-  // SV für T0 (2026): Immer 2026-Grenzwerte
-  const sv1_t0 = calcSVBeitrag(brutto1, kids, false);
-  const sv2_t0 = verheiratet ? calcSVBeitrag(brutto2, kids, false) : { rv: 0, alv: 0, kv: 0, pv: 0, sa: 0, total: 0 };
-  const saT0 = sv1_t0.sa + sv2_t0.sa;
-  
-  // SV für T1 (2028): 2027-Grenzwerte wenn adjustSV aktiv, sonst 2026-Grenzwerte
-  const sv1_t1 = calcSVBeitrag(brutto1, kids, adjustSV);
-  const sv2_t1 = verheiratet ? calcSVBeitrag(brutto2, kids, adjustSV) : { rv: 0, alv: 0, kv: 0, pv: 0, sa: 0, total: 0 };
-  const saT1 = sv1_t1.sa + sv2_t1.sa;
-  
-  const zveT0 = Math.max(0, bruttoGesamt - wkT0 - saT0);
-  const zveT1 = Math.max(0, bruttoGesamt - wkT1 - saT1);
-  
-  // Kinderfreibetrag: volle Höhe (inkl. BEA) nur bei Zusammenveranlagung;
-  // Alleinstehende erhalten grundsätzlich nur den hälftigen Freibetrag.
-  const kfbT0 = (verheiratet ? KFB_PRO_KIND_T0 : KFB_PRO_KIND_T0 / 2) * kids;
-  const kfbT1 = (verheiratet ? KFB_PRO_KIND_T1 : KFB_PRO_KIND_T1 / 2) * kids;
-  
-  const kgT0 = PARAMS.t0.kgMonat * 12 * kids;
-  const kgT1 = PARAMS.t1.kgMonat * 12 * kids;
-  
-  const estT0 = incomeTax(zveT0, PARAMS.t0.gfb, PARAMS.t0.eck1, PARAMS.t0.eck2, verheiratet);
-  const estT1 = incomeTax(zveT1, PARAMS.t1.gfb, PARAMS.t1.eck1, PARAMS.t1.eck2, verheiratet);
-  
-  const estKfbT0 = incomeTax(Math.max(0, zveT0 - kfbT0), PARAMS.t0.gfb, PARAMS.t0.eck1, PARAMS.t0.eck2, verheiratet);
-  const estKfbT1 = incomeTax(Math.max(0, zveT1 - kfbT1), PARAMS.t1.gfb, PARAMS.t1.eck1, PARAMS.t1.eck2, verheiratet);
-  
-  // Günstigerprüfung:
-  // Bei Singles wird der halbe KFB mit dem halben Kindergeld verglichen.
-  // Bei Verheirateten der volle KFB mit dem vollen Kindergeld.
-  const kgOffsetT0 = (verheiratet ? 1 : 0.5) * kgT0;
-  const kgOffsetT1 = (verheiratet ? 1 : 0.5) * kgT1;
-  
-  const guenstigerT0 = (estT0 - estKfbT0) > kgOffsetT0 ? "Kinderfreibetrag" : "Kindergeld";
-  const guenstigerT1 = (estT1 - estKfbT1) > kgOffsetT1 ? "Kinderfreibetrag" : "Kindergeld";
-  
-  // Der finanzielle Vorteil durch Kinder:
-  // Wenn der KFB günstiger ist, profitiert man von der Steuerersparnis PLUS dem nicht-angerechneten Kindergeldteil.
-  // Wenn Kindergeld günstiger ist, profitiert man vom vollen Kindergeld.
-  const vorteilT0 = guenstigerT0 === "Kinderfreibetrag" ? (estT0 - estKfbT0) + (kgT0 - kgOffsetT0) : kgT0;
-  const vorteilT1 = guenstigerT1 === "Kinderfreibetrag" ? (estT1 - estKfbT1) + (kgT1 - kgOffsetT1) : kgT1;
-  
-  // Netto-Steuerlast darf negativ werden: das bildet den Fall ab, in dem das
-  // Kindergeld die tarifliche Steuer übersteigt und der Staat per saldo an die
-  // Familie auszahlt. Kein künstlicher Floor mehr nötig – die Differenz ist
-  // automatisch korrekt, auch im Übergang zwischen Nullsteuerzone und
-  // Günstigerprüfungs-Knick.
-  const effT0_tax = estT0 - vorteilT0;
-  const effT1_tax = estT1 - vorteilT1;
-  
-  // Reales Gesamteinkommen (Netto) nach Sozialabgaben und Steuer
-  const svTotalT0 = sv1_t0.total + sv2_t0.total;
-  const svTotalT1 = sv1_t1.total + sv2_t1.total;
-  const nettoT0 = bruttoGesamt - svTotalT0 - effT0_tax;
-  const nettoT1 = bruttoGesamt - svTotalT1 - effT1_tax;
-  
-  // y-Achsenwerte für Grafik 2: bei adjustSV inkl. Sozialabgaben
-  const effT0 = adjustSV ? (effT0_tax + svTotalT0) : effT0_tax;
-  const effT1 = adjustSV ? (effT1_tax + svTotalT1) : effT1_tax;
-  
-  // Die Entlastung ist immer die Differenz der Belastungen
-  const entlastung = effT0 - effT1;
-  
-  // Real vom Lohn abgezogene / veranlagte Steuer: Kindergeld ist eine separate
-  // Auszahlung und mindert nie die tarifliche Steuer selbst. Der Kinderfreibetrag
-  // mindert sie nur, wenn die Günstigerprüfung tatsächlich zugunsten des KFB
-  // ausfällt – andernfalls bleibt es bei der vollen tariflichen Steuer auf das
-  // zvE ohne KFB-Abzug (Regelfall: Familienleistungsausgleich läuft über KG).
-  const realTaxT0 = guenstigerT0 === "Kinderfreibetrag" ? estKfbT0 : estT0;
-  const realTaxT1 = guenstigerT1 === "Kinderfreibetrag" ? estKfbT1 : estT1;
-  
-  const avgT0 = zveT0 > 0 ? (realTaxT0 / zveT0) * 100 : 0;
-  const avgT1 = zveT1 > 0 ? (realTaxT1 / zveT1) * 100 : 0;
-  
-  const grenzT0 = incomeMarginalRate(zveT0, PARAMS.t0.gfb, PARAMS.t0.eck1, PARAMS.t0.eck2, verheiratet) * 100;
-  const grenzT1 = incomeMarginalRate(zveT1, PARAMS.t1.gfb, PARAMS.t1.eck1, PARAMS.t1.eck2, verheiratet) * 100;
-  
+  const entlastung2027 = T0.eff - T2027.eff;
+  const entlastung2028 = T0.eff - T1.eff;
+  const entlastungGesamt = entlastung2027 + entlastung2028;
+
+  // Alternativ-Berechnung für BMF 2028 (mit KFB = 10.292 € statt 10.236 €)
+  const altKfbT1 = (verheiratet ? 10292 : 10292 / 2) * kids;
+  const altEstKfbT1 = incomeTax(Math.max(0, T1.zve - altKfbT1), PARAMS.t1.gfb, PARAMS.t1.eck1, PARAMS.t1.eck2, verheiratet);
+  const altGuenstigerT1 = (T1.est - altEstKfbT1) > ((verheiratet ? 1 : 0.5) * T1.kg) ? "Kinderfreibetrag" : "Kindergeld";
+  const altVorteilT1 = altGuenstigerT1 === "Kinderfreibetrag" ? (T1.est - altEstKfbT1) + (T1.kg - ((verheiratet ? 1 : 0.5) * T1.kg)) : T1.kg;
+  const altEffT1_tax = T1.est - altVorteilT1;
+  const altEffT1 = adjustSV ? (altEffT1_tax + T1.svTotal) : altEffT1_tax;
+  const entlastungBmf2028 = T0.eff - altEffT1;
+
   return {
-    entlastung,
-    effT0,
-    effT1,
-    estT0,
-    estT1,
-    realTaxT0,
-    realTaxT1,
-    zveT0,
-    zveT1,
+    entlastung: entlastung2028, // Für Kompatibilität mit dem Rest der App
+    entlastung2027,
+    entlastung2028,
+    entlastungGesamt,
+    entlastungBmf2028,
+    
+    // T0 (2026)
+    effT0: T0.eff,
+    estT0: T0.est,
+    realTaxT0: T0.realTax,
+    zveT0: T0.zve,
+    wkT0: T0.wk,
+    vorteilT0: T0.vorteil,
+    kgT0: T0.kg,
+    saT0: T0.sa,
+    svTotalT0: T0.svTotal,
+    nettoT0: T0.netto,
+    avgT0: T0.avg,
+    grenzT0: T0.grenz,
+    guenstigerT0: T0.guenstiger,
+    
+    // T2027 (2027)
+    effT2027: T2027.eff,
+    estT2027: T2027.est,
+    realTaxT2027: T2027.realTax,
+    zveT2027: T2027.zve,
+    wkT2027: T2027.wk,
+    vorteilT2027: T2027.vorteil,
+    kgT2027: T2027.kg,
+    saT2027: T2027.sa,
+    svTotalT2027: T2027.svTotal,
+    nettoT2027: T2027.netto,
+    avgT2027: T2027.avg,
+    grenzT2027: T2027.grenz,
+    guenstigerT2027: T2027.guenstiger,
+
+    // T1 (2028)
+    effT1: T1.eff,
+    estT1: T1.est,
+    realTaxT1: T1.realTax,
+    zveT1: T1.zve,
+    wkT1: T1.wk,
+    vorteilT1: T1.vorteil,
+    kgT1: T1.kg,
+    saT1: T1.sa,
+    svTotalT1: T1.svTotal,
+    nettoT1: T1.netto,
+    avgT1: T1.avg,
+    grenzT1: T1.grenz,
+    guenstigerT1: T1.guenstiger,
+    
     bruttoGesamt,
-    wkT0,
-    wkT1,
-    vorteilT0,
-    vorteilT1,
-    kgT0,
-    kgT1,
-    saT0,
-    saT1,
-    svTotalT0,
-    svTotalT1,
-    nettoT0,
-    nettoT1,
-    avgT0,
-    avgT1,
-    grenzT0,
-    grenzT1,
-    guenstigerT0,
-    guenstigerT1,
+    entlastungsbetrag,
   };
 }
 
@@ -837,59 +861,50 @@ export default function SteuerreformRechner() {
                                          <span className="sr-toggle-label">Sozialabgaben 2027 anpassen</span>
                                      </div>
                                  </div>
+                                 <div className="sr-readout">
+                                     <div className="sr-readout-label">Entlastung 2028</div>
+                                     <div className="sr-readout-value">
+                                         {eur0(current.entlastung)}
+                                         {current.effT0 > 0 && (current.entlastung / current.effT0) * 100 <= 150 && (
+                                             <span className="sr-readout-pct"> ({((current.entlastung / current.effT0) *
+                                             100).toFixed(1)}%)</span>
+                                             )}
+                                     </div>
+                                     <div className="sr-readout-sub">
+                                         Haushaltsbrutto {eur0(current.bruttoGesamt)} · Günstiger 2026:
+                                         {current.guenstigerT0} · Günstiger 2028: {current.guenstigerT1}
+                                     </div>
 
-                                <div className="sr-readout">
-                                    <div className="sr-readout-label">Entlastung pro Jahr</div>
-                                    <div className="sr-readout-value">
-                                        {eur0(current.entlastung)}
-                                        {current.effT0 > 0 && (current.entlastung / current.effT0) * 100 <= 150 && (
-                                            <span className="sr-readout-pct"> ({((current.entlastung / current.effT0) *
-                                            100).toFixed(1)}%)</span>
-                                            )}
-                                    </div>
-                                    <div className="sr-readout-sub">
-                                        Haushaltsbrutto {eur0(current.bruttoGesamt)} · Günstiger 2026:
-                                        {current.guenstigerT0} · Günstiger 2028: {current.guenstigerT1}
-                                    </div>
-
-                                    <table className="sr-mini-table">
-                                        <thead>
-                                            <tr>
-                                                <th></th>
-                                                <th>2026</th>
-                                                <th>2028</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>{adjustSV ? "Sozialabgaben (Gesamt-AN)" : "SV-Beiträge (AN, abzugsfähig)"}</td>
-                                                <td>{eur0(adjustSV ? current.svTotalT0 : current.saT0)}</td>
-                                                <td>{eur0(adjustSV ? current.svTotalT1 : current.saT1)}</td>
-                                            </tr>
-                                            {adjustSV && (
-                                                <tr>
-                                                    <td>Reales Netto (inkl. KG)</td>
-                                                    <td>{eur0(current.nettoT0)}</td>
-                                                    <td>{eur0(current.nettoT1)}</td>
-                                                </tr>
-                                            )}
-                                            <tr>
-                                                <td>Netto-Transferbilanz</td>
-                                                <td>{eur0(current.effT0)}</td>
-                                                <td>{eur0(current.effT1)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Ø-Steuersatz</td>
-                                                <td>{current.avgT0.toFixed(1)}%</td>
-                                                <td>{current.avgT1.toFixed(1)}%</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Grenzsteuersatz</td>
-                                                <td>{current.grenzT0.toFixed(1)}%</td>
-                                                <td>{current.grenzT1.toFixed(1)}%</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                      <table className="sr-mini-table">
+                                          <thead>
+                                              <tr>
+                                                  <th></th>
+                                                  <th>2026</th>
+                                                  <th>2027</th>
+                                                  <th>2028</th>
+                                              </tr>
+                                          </thead>
+                                          <tbody>
+                                              <tr>
+                                                  <td>Ø-Steuersatz</td>
+                                                  <td>{current.avgT0.toFixed(1)}%</td>
+                                                  <td>{current.avgT2027.toFixed(1)}%</td>
+                                                  <td>{current.avgT1.toFixed(1)}%</td>
+                                              </tr>
+                                              <tr>
+                                                  <td>Grenzsteuersatz</td>
+                                                  <td>{current.grenzT0.toFixed(1)}%</td>
+                                                  <td>{current.grenzT2027.toFixed(1)}%</td>
+                                                  <td>{current.grenzT1.toFixed(1)}%</td>
+                                              </tr>
+                                              <tr style={{ fontWeight: "bold", borderTop: "2px solid var(--line)" }}>
+                                                  <td>Entlastung vs. 2026</td>
+                                                  <td>-</td>
+                                                  <td>{eur0(current.entlastung2027)}</td>
+                                                  <td>{eur0(current.entlastung2028)}</td>
+                                              </tr>
+                                          </tbody>
+                                      </table>
                                 </div>
                             </div>
 
@@ -1073,67 +1088,120 @@ export default function SteuerreformRechner() {
                                             "Unterhalb der Nulllinie übersteigt das Kindergeld die tarifliche Steuer – die Familie erhält per saldo mehr, als sie zahlt (markiert als „Kindergeld\"-Bereich, keine negative Steuer). Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Transferbilanz."
                                         }
                                     </div>
-                                </div>
+                                    <table className="sr-table">
+                                        <thead>
+                                            <tr>
+                                                <th></th>
+                                                <th>2026</th>
+                                                <th>2027</th>
+                                                <th>2028</th>
+                                                <th>Gesamt 27/28</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>Werbungskosten</td>
+                                                <td>{eur0(current.wkT0)}</td>
+                                                <td>{eur0(current.wkT2027)}</td>
+                                                <td>{eur0(current.wkT1)}</td>
+                                                <td>-</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Sozialversicherung (AN, abzugsfähig{adjustSV ? "" : ", unverändert"})</td>
+                                                <td>{eur0(current.saT0)}</td>
+                                                <td>{eur0(current.saT2027)}</td>
+                                                <td>{eur0(current.saT1)}</td>
+                                                <td>-</td>
+                                            </tr>
+                                            {current.entlastungsbetrag > 0 && (
+                                                <tr>
+                                                    <td>Entlastungsbetrag für Alleinerziehende (§ 24b)</td>
+                                                    <td>{eur0(current.entlastungsbetrag)}</td>
+                                                    <td>{eur0(current.entlastungsbetrag)}</td>
+                                                    <td>{eur0(current.entlastungsbetrag)}</td>
+                                                    <td>-</td>
+                                                </tr>
+                                            )}
+                                            <tr>
+                                                <td>zu versteuerndes Einkommen</td>
+                                                <td>{eur0(current.zveT0)}</td>
+                                                <td>{eur0(current.zveT2027)}</td>
+                                                <td>{eur0(current.zveT1)}</td>
+                                                <td>-</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Einkommensteuer (Tarif)</td>
+                                                <td>{eur0(current.estT0)}</td>
+                                                <td>{eur0(current.estT2027)}</td>
+                                                <td>{eur0(current.estT1)}</td>
+                                                <td>-</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Kindergeld / KFB-Vorteil</td>
+                                                <td>{eur0(current.vorteilT0)}</td>
+                                                <td>{eur0(current.vorteilT2027)}</td>
+                                                <td>{eur0(current.vorteilT1)}</td>
+                                                <td>-</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Netto-Transferbilanz (Steuer ./. Kindergeld/KFB)</td>
+                                                <td>{eur0(current.effT0)}</td>
+                                                <td>{eur0(current.effT2027)}</td>
+                                                <td>{eur0(current.effT1)}</td>
+                                                <td>-</td>
+                                            </tr>
+                                            {adjustSV && (
+                                                <>
+                                                    <tr>
+                                                        <td>Sozialabgaben gesamt (Arbeitnehmer)</td>
+                                                        <td>{eur0(current.svTotalT0)}</td>
+                                                        <td>{eur0(current.svTotalT2027)}</td>
+                                                        <td>{eur0(current.svTotalT1)}</td>
+                                                        <td>{eur0(current.svTotalT2027 + current.svTotalT1)}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Reales Haushalts-Nettoeinkommen</td>
+                                                        <td>{eur0(current.nettoT0)}</td>
+                                                        <td>{eur0(current.nettoT2027)}</td>
+                                                        <td>{eur0(current.nettoT1)}</td>
+                                                        <td>-</td>
+                                                    </tr>
+                                                </>
+                                            )}
+                                            <tr className="sr-highlight">
+                                                <td>{adjustSV ? "Netto-Entlastung gesamt / Jahr" : "Entlastung vs. 2026 / Jahr"}</td>
+                                                <td>-</td>
+                                                <td>{eur0(current.entlastung2027)}</td>
+                                                <td>{eur0(current.entlastung2028)}</td>
+                                                <td>{eur0(current.entlastungGesamt)}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
 
-                                <table className="sr-table">
-                                    <thead>
-                                        <tr>
-                                            <th></th>
-                                            <th>2026 · geltendes Recht</th>
-                                            <th>2028 · nach Reform</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>Werbungskosten</td>
-                                            <td>{eur0(current.wkT0)}</td>
-                                            <td>{eur0(current.wkT1)}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Sozialversicherung (AN, abzugsfähig{adjustSV ? "" : ", unverändert"})</td>
-                                            <td>{eur0(current.saT0)}</td>
-                                            <td>{eur0(current.saT1)}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>zu versteuerndes Einkommen</td>
-                                            <td>{eur0(current.zveT0)}</td>
-                                            <td>{eur0(current.zveT1)}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Einkommensteuer (Tarif)</td>
-                                            <td>{eur0(current.estT0)}</td>
-                                            <td>{eur0(current.estT1)}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Kindergeld / KFB-Vorteil</td>
-                                            <td>{eur0(current.vorteilT0)}</td>
-                                            <td>{eur0(current.vorteilT1)}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Netto-Transferbilanz (Steuer ./. Kindergeld/KFB)</td>
-                                            <td>{eur0(current.effT0)}</td>
-                                            <td>{eur0(current.effT1)}</td>
-                                        </tr>
-                                        {adjustSV && (
-                                            <>
-                                                <tr>
-                                                    <td>Sozialabgaben gesamt (Arbeitnehmer)</td>
-                                                    <td>{eur0(current.svTotalT0)}</td>
-                                                    <td>{eur0(current.svTotalT1)}</td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Reales Haushalts-Nettoeinkommen</td>
-                                                    <td>{eur0(current.nettoT0)}</td>
-                                                    <td>{eur0(current.nettoT1)}</td>
-                                                </tr>
-                                            </>
-                                        )}
-                                        <tr className="sr-highlight">
-                                            <td>{adjustSV ? "Netto-Entlastung gesamt / Jahr" : "Entlastung ./. Jahr"}</td>
-                                            <td colSpan={2}>{eur0(current.entlastung)}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                    {(() => {
+                                        if (current.guenstigerT1 === "Kinderfreibetrag") {
+                                            return (
+                                                <div style={{
+                                                    marginTop: "16px",
+                                                    padding: "12px",
+                                                    background: "#eaf6f7",
+                                                    border: "1px solid #52b7c1",
+                                                    borderRadius: "3px",
+                                                    fontSize: "11.5px",
+                                                    color: "var(--ink)",
+                                                    fontFamily: "var(--font-sans)",
+                                                    lineHeight: "1.5"
+                                                }}>
+                                                    <strong>Vergleich der Berechnungsmodelle:</strong><br />
+                                                    • Entlastung mit dem offiziellen Kinderfreibetrag (10.236 €): <strong>{eur0(current.entlastung2028)}</strong><br />
+                                                    • Entlastung mit dem vom BMF unterstellten Kinderfreibetrag (10.292 €): <strong>{eur0(current.entlastungBmf2028)}</strong><br />
+                                                    • Differenzbetrag: <strong>{eur0(current.entlastungBmf2028 - current.entlastung2028)}</strong>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                </div>
                             </div>
                         </div>
 
@@ -1145,12 +1213,10 @@ export default function SteuerreformRechner() {
                                     sehr hohe Einkommen ab 250.000&nbsp;€.</li>
                                 <li><b>Fahrtkosten:</b> einheitlich 0,38&nbsp;€ pro Kilometer und Arbeitstag (220
                                     Tage/Jahr), wie seit 2026 gesetzlich vorgesehen.</li>
-                                <li><b>Kinderfreibetrag 2028:</b> noch nicht gesetzlich festgelegt. Angenommen wird eine
-                                    vorsichtige Anhebung um 85&nbsp;% der Kindergeld-Erhöhung. Bei „Single" nur der
-                                    hälftige Freibetrag, wie gesetzlich vorgesehen.</li>
-                                <li><b>Sozialversicherung:</b> reale Beiträge zu Renten-, Arbeitslosen-, Kranken- und
-                                    Pflegeversicherung, getrennt für jede Person und jeweils bis zur eigenen
-                                    Beitragsbemessungsgrenze gedeckelt. {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800&nbsp;€ KV/PV, 104.400&nbsp;€ RV/ALV), andernfalls die Werte von 2026 (69.750&nbsp;€ KV/PV, 101.400&nbsp;€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750&nbsp;€ KV/PV, 101.400&nbsp;€ RV/ALV)."} Der Pflegeversicherungsbeitrag berücksichtigt die Kinderzahl. Als
+                                <li><b>Kinderfreibetrag & Alleinerziehende:</b> Der Kinderfreibetrag ist für 2027 auf 10.056&nbsp;€ (+300&nbsp;€) und für 2028 auf 10.236&nbsp;€ (+480&nbsp;€ gegenüber 2026) festgelegt, wie im Koalitionsbeschluss vom 2. Juli 2026 vorgesehen. Bei Alleinerziehenden wird der Entlastungsbetrag nach § 24b EStG (4.260&nbsp;€ für das erste Kind, +240&nbsp;€ für jedes weitere Kind) steuermindernd berücksichtigt.</li>
+                                 <li><b>Sozialversicherung:</b> reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und
+                                     Pflegeversicherung, getrennt für jede Person und jeweils bis zur eigenen
+                                    Beitragsbemessungsgrenze gedeckelt. {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegeversicherungsbeitrag berücksichtigt die Kinderzahl. Als
                                     Sonderausgaben angesetzt: Renten- und Pflegebeitrag voll,
                                     Krankenversicherungsbeitrag zu 96&nbsp;%.</li>
                             </ul>
