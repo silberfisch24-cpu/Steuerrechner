@@ -311,6 +311,32 @@ export default function SteuerreformRechner() {
   const [km2, setKm2] = useState(8);
   const [kids, setKids] = useState(2);
   const [adjustSV, setAdjustSV] = useState(false);
+  const [viewMode, setViewMode] = useState("einfach"); // "einfach" | "detailliert"
+
+  const isSimple = viewMode === "einfach";
+  const SIMPLE_MAX = 130000;
+  const SIMPLE_PER = 100000;
+
+  useEffect(() => {
+    if (isSimple) {
+      const verheiratet = familienstand === "verheiratet";
+      const sum = brutto1 + (verheiratet ? brutto2 : 0);
+      if (sum > SIMPLE_MAX) {
+        const factor = SIMPLE_MAX / sum;
+        const newB1 = Math.min(SIMPLE_PER, Math.round(brutto1 * factor / 500) * 500);
+        const newB2 = Math.min(SIMPLE_PER, SIMPLE_MAX - newB1);
+        setBrutto1(newB1);
+        if (verheiratet) setBrutto2(newB2);
+      } else {
+        if (brutto1 > SIMPLE_PER) {
+          setBrutto1(SIMPLE_PER);
+        }
+        if (verheiratet && brutto2 > SIMPLE_PER) {
+          setBrutto2(SIMPLE_PER);
+        }
+      }
+    }
+  }, [isSimple, familienstand, brutto1, brutto2]);
 
   const activeFamilyId = useMemo(() => {
     const match = BMF_FAMILIES.find(f => 
@@ -359,7 +385,14 @@ export default function SteuerreformRechner() {
     };
   }, []);
 
+  const verheiratet = familienstand === "verheiratet";
+
   const xAxisTicks = useMemo(() => {
+    if (isSimple) {
+      return verheiratet
+        ? [20000, 40000, 60000, 80000, 100000, 120000, 130000]
+        : [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000];
+    }
     if (windowWidth > 1000) {
       return [10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000, 160000, 170000, 180000, 190000, 200000];
     } else if (windowWidth > 600) {
@@ -367,9 +400,37 @@ export default function SteuerreformRechner() {
     } else {
       return [50000, 100000, 150000, 200000];
     }
-  }, [windowWidth]);
+  }, [windowWidth, isSimple, verheiratet]);
 
-  const verheiratet = familienstand === "verheiratet";
+  const sliderMax1 = isSimple
+    ? Math.min(SIMPLE_PER, SIMPLE_MAX - (verheiratet ? brutto2 : 0))
+    : 150000;
+
+  const sliderMax2 = isSimple
+    ? Math.min(SIMPLE_PER, SIMPLE_MAX - brutto1)
+    : 150000;
+
+  const handleBrutto1Change = (val) => {
+    setBrutto1(val);
+    if (isSimple && verheiratet && val + brutto2 > SIMPLE_MAX) {
+      setBrutto2(SIMPLE_MAX - val);
+    }
+  };
+
+  const handleBrutto2Change = (val) => {
+    setBrutto2(val);
+    if (isSimple && val + brutto1 > SIMPLE_MAX) {
+      setBrutto1(SIMPLE_MAX - val);
+    }
+  };
+
+  const xDomain = useMemo(() => {
+    if (isSimple) {
+      return verheiratet ? [0, 130000] : [0, 100000];
+    }
+    return [0, 200000];
+  }, [isSimple, verheiratet]);
+
   const bruttoAktuell = brutto1 + (verheiratet ? brutto2 : 0);
   const bruttoAktuellKey = Math.min(200000, Math.max(2000, Math.round(bruttoAktuell / 2000) * 2000));
   const splitRatio = bruttoAktuell > 0 ? brutto1 / bruttoAktuell : 1;
@@ -953,16 +1014,16 @@ export default function SteuerreformRechner() {
 
                                 <div className="sr-field">
                                     <label>Brutto Partner 1 <span className="sr-val">{eur0(brutto1)}</span></label>
-                                    <input type="range" min="0" max="150000" step="500" value={brutto1} onChange={(e)=>
-                                    setBrutto1(Number(e.target.value))}
+                                    <input type="range" min="0" max={sliderMax1} step="500" value={brutto1} onChange={(e)=>
+                                    handleBrutto1Change(Number(e.target.value))}
                                     />
                                 </div>
 
                                 {verheiratet && (
                                 <div className="sr-field">
                                     <label>Brutto Partner 2 <span className="sr-val">{eur0(brutto2)}</span></label>
-                                    <input type="range" min="0" max="150000" step="500" value={brutto2} onChange={(e)=>
-                                    setBrutto2(Number(e.target.value))}
+                                    <input type="range" min="0" max={sliderMax2} step="500" value={brutto2} onChange={(e)=>
+                                    handleBrutto2Change(Number(e.target.value))}
                                     />
                                 </div>
                                 )}
@@ -996,58 +1057,81 @@ export default function SteuerreformRechner() {
                                     </div>
                                 </div>
 
-                                 <div className="sr-field">
-                                     <div className="sr-toggle-container" onClick={() => setAdjustSV(!adjustSV)}>
-                                         <div className={`sr-toggle-switch ${adjustSV ? "active" : ""}`}>
-                                             <div className="sr-toggle-handle" />
+                                <div className="sr-field">
+                                    <label>Ansicht</label>
+                                    <div className="sr-kids">
+                                        <button className={isSimple ? "active" : ""} onClick={() => setViewMode("einfach")}>
+                                            Einfach
+                                        </button>
+                                        <button className={!isSimple ? "active" : ""} onClick={() => setViewMode("detailliert")}>
+                                            Detailliert
+                                        </button>
+                                    </div>
+                                </div>
+
+                                 {!isSimple && (
+                                     <div className="sr-field">
+                                         <div className="sr-toggle-container" onClick={() => setAdjustSV(!adjustSV)}>
+                                             <div className={`sr-toggle-switch ${adjustSV ? "active" : ""}`}>
+                                                 <div className="sr-toggle-handle" />
+                                             </div>
+                                             <span className="sr-toggle-label">Sozialabgaben 2027 anpassen</span>
                                          </div>
-                                         <span className="sr-toggle-label">Sozialabgaben 2027 anpassen</span>
                                      </div>
-                                 </div>
+                                 )}
                                  <div className="sr-readout">
                                      <div className="sr-readout-label">Entlastung 2028</div>
                                      <div className="sr-readout-value">
                                          {eur0(current.entlastung)}
-                                         {current.effT0 > 0 && (current.entlastung / current.effT0) * 100 <= 150 && (
+                                         {!isSimple && current.effT0 > 0 && (current.entlastung / current.effT0) * 100 <= 150 && (
                                              <span className="sr-readout-pct"> ({((current.entlastung / current.effT0) *
                                              100).toFixed(1)}%)</span>
                                              )}
                                      </div>
-                                     <div className="sr-readout-sub">
-                                         Haushaltsbrutto {eur0(current.bruttoGesamt)} · Günstiger 2026:
-                                         {current.guenstigerT0} · Günstiger 2028: {current.guenstigerT1}
-                                     </div>
+                                     {!isSimple && (
+                                         <div className="sr-readout-sub">
+                                             Haushaltsbrutto {eur0(current.bruttoGesamt)} · Günstiger 2026:
+                                             {current.guenstigerT0} · Günstiger 2028: {current.guenstigerT1}
+                                         </div>
+                                     )}
+                                     {isSimple && (
+                                         <div className="sr-readout-sub">
+                                             Haushaltsbrutto {eur0(current.bruttoGesamt)}
+                                         </div>
+                                     )}
 
-                                      <table className="sr-mini-table">
-                                          <thead>
-                                              <tr>
-                                                  <th></th>
-                                                  <th>2026</th>
-                                                  <th>2027</th>
-                                                  <th>2028</th>
-                                              </tr>
-                                          </thead>
-                                          <tbody>
-                                              <tr>
-                                                  <td>Ø-Steuersatz</td>
-                                                  <td>{current.avgT0.toFixed(1)}%</td>
-                                                  <td>{current.avgT2027.toFixed(1)}%</td>
-                                                  <td>{current.avgT1.toFixed(1)}%</td>
-                                              </tr>
-                                              <tr>
-                                                  <td>Grenzsteuersatz</td>
-                                                  <td>{current.grenzT0.toFixed(1)}%</td>
-                                                  <td>{current.grenzT2027.toFixed(1)}%</td>
-                                                  <td>{current.grenzT1.toFixed(1)}%</td>
-                                              </tr>
-                                              <tr style={{ fontWeight: "bold", borderTop: "2px solid var(--line)" }}>
-                                                  <td>Entlastung vs. 2026</td>
-                                                  <td>-</td>
-                                                  <td>{eur0(current.entlastung2027)}</td>
-                                                  <td>{eur0(current.entlastung2028)}</td>
-                                              </tr>
-                                          </tbody>
-                                      </table>
+                                      {!isSimple && (
+                                          <table className="sr-mini-table">
+                                              <thead>
+                                                  <tr>
+                                                      <th></th>
+                                                      <th>2026</th>
+                                                      <th>2027</th>
+                                                      <th>2028</th>
+                                                  </tr>
+                                              </thead>
+                                              <tbody>
+                                                  <tr>
+                                                      <td>Ø-Steuersatz</td>
+                                                      <td>{current.avgT0.toFixed(1)}%</td>
+                                                      <td>{current.avgT2027.toFixed(1)}%</td>
+                                                      <td>{current.avgT1.toFixed(1)}%</td>
+                                                  </tr>
+                                                  <tr>
+                                                      <td>Grenzsteuersatz</td>
+                                                      <td>{current.grenzT0.toFixed(1)}%</td>
+                                                      <td>{current.grenzT2027.toFixed(1)}%</td>
+                                                      <td>{current.grenzT1.toFixed(1)}%</td>
+                                                  </tr>
+                                                  <tr style={{ fontWeight: "bold", borderTop: "2px solid var(--line)" }}>
+                                                      <td>Entlastung vs. 2026</td>
+                                                      <td>-</td>
+                                                      <td>{eur0(current.entlastung2027)}</td>
+                                                      <td>{eur0(current.entlastung2028)}</td>
+                                                  </tr>
+                                              </tbody>
+                                          </table>
+                                      )}
                                 </div>
                             </div>
 
@@ -1136,24 +1220,27 @@ export default function SteuerreformRechner() {
                                      </div>
                                 </div>
 
+
                                 <div className="sr-chart-wrap" style={{ marginTop: 18 }}>
                                     <div className="sr-legend">
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
                                                 background: "var(--steel)" }} /> {adjustSV ? "Netto-Abgabenlast 2026 (Steuer + SV ./. Kindergeld)" : "Netto-Transferbilanz 2026 (Steuer ./. Kindergeld/KFB)"}</span>
                                         <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
                                                 background: "var(--gold)" }} /> {adjustSV ? "Netto-Abgabenlast 2028" : "Netto-Transferbilanz 2028"}</span>
-                                        <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
-                                                background: "var(--turkis)" , height: "2px" ,
-                                                borderTop: "2px dashed var(--turkis)" }} /> Ø-Steuersatz auf real
-                                            gezahlte Steuer (rechte Achse)</span>
+                                        {!isSimple && (
+                                            <span className="sr-legend-item"><span className="sr-legend-swatch" style={{
+                                                    background: "var(--turkis)" , height: "2px" ,
+                                                    borderTop: "2px dashed var(--turkis)" }} /> Ø-Steuersatz auf real
+                                                gezahlte Steuer (rechte Achse)</span>
+                                        )}
                                         <span className="sr-legend-item" style={{ color: "var(--ink-soft)" }}>Eigenes
                                             Profil: {km1}{verheiratet ? ` km / ${km2} km` : " km"}, {kids} Kind{kids ===
-                                            1 ? "" : "er"} · {adjustSV ? "negativer Bereich = Kindergeld übersteigt Steuer + SV" : "negativer Bereich = Kindergeld übersteigt die Steuer"}</span>
+                                            1 ? "" : "er"}{!isSimple && ` · ${adjustSV ? "negativer Bereich = Kindergeld übersteigt Steuer + SV" : "negativer Bereich = Kindergeld übersteigt die Steuer"}`}</span>
                                     </div>
                                     <ResponsiveContainer width="100%" height={320}>
                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
                                             <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
-                                            <XAxis dataKey="brutto" tickFormatter={(v)=> `${v / 1000}`} ticks={xAxisTicks}
+                                            <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`} ticks={xAxisTicks}
                                                 stroke="var(--ink-soft)"
                                                 tick={{ fontFamily: "IBM Plex Mono", fontSize: 11 }}
                                                 label={{ value: "Haushaltsbrutto (in Tsd. €)", position: "insideBottom", offset:
@@ -1164,13 +1251,18 @@ export default function SteuerreformRechner() {
                                                     tickFormatter={axisEuro} width={56} 
                                                     domain={[minYDomain, maxYDomain]}
                                                     ticks={leftTicks} />
-                                                <YAxis yAxisId="right" orientation="right" stroke="var(--ink-soft)" tick={{
-                                                    fontFamily: "IBM Plex Mono" , fontSize: 11 }} tickFormatter={(v)=>
-                                                    `${v}%`}
-                                                    width={44}
-                                                    domain={[0, maxRate]}
-                                                    ticks={rightTicks}
-                                                    />
+                                                {!isSimple && (
+                                                    <YAxis yAxisId="right" orientation="right" stroke="var(--ink-soft)" tick={{
+                                                        fontFamily: "IBM Plex Mono" , fontSize: 11 }} tickFormatter={(v)=>
+                                                        `${v}%`}
+                                                        width={44}
+                                                        domain={[0, maxRate]}
+                                                        ticks={rightTicks}
+                                                        />
+                                                )}
+                                                {isSimple && (
+                                                    <YAxis yAxisId="right" orientation="right" width={44} stroke="transparent" tick={false} />
+                                                )}
                                                     <Tooltip labelFormatter={(v)=> eur0(v)}
                                                         formatter={(v, name) => [name && name.startsWith("Ø-Steuersatz")
                                                         ? `${v}%` : eur0(v), name]}
@@ -1180,15 +1272,15 @@ export default function SteuerreformRechner() {
                                                         <ReferenceLine yAxisId="left" x={bruttoAktuellKey}
                                                             stroke="var(--gold)" strokeDasharray="3 3"
                                                             strokeWidth={1.5} />
-                                                        <ReferenceArea yAxisId="left" x2={limit2Key} y1={minYDomain} y2={maxYDomain}
+                                                        <ReferenceArea yAxisId="left" x2={Math.min(limit2Key, xDomain[1])} y1={minYDomain} y2={maxYDomain}
                                                              fill="rgba(45, 60, 75, 0.16)" stroke="none"
                                                              ifOverflow="extendDomain">
                                                              <Label value="Steuerfrei" position="insideTopLeft"
                                                                  fill="rgba(45, 60, 75, 0.85)" fontFamily="IBM Plex Mono"
                                                                  fontSize={9} />
                                                          </ReferenceArea>
-                                                         {kids > 0 && (
-                                                             <ReferenceArea yAxisId="left" x1={limit2Key} x2={yPoint} y1={minYDomain} y2={maxYDomain}
+                                                         {kids > 0 && Math.min(limit2Key, xDomain[1]) < Math.min(yPoint, xDomain[1]) && (
+                                                             <ReferenceArea yAxisId="left" x1={Math.min(limit2Key, xDomain[1])} x2={Math.min(yPoint, xDomain[1])} y1={minYDomain} y2={maxYDomain}
                                                                  fill="rgba(45, 60, 75, 0.05)" stroke="none"
                                                                  ifOverflow="extendDomain">
                                                                  <Label value="Nettoempfänger" position="insideTopLeft"
@@ -1196,13 +1288,15 @@ export default function SteuerreformRechner() {
                                                                      fontSize={9} />
                                                              </ReferenceArea>
                                                          )}
-                                                         <ReferenceArea yAxisId="left" x1={yPoint} x2={200000} y1={minYDomain} y2={maxYDomain}
-                                                             fill="transparent" stroke="none"
-                                                             ifOverflow="extendDomain">
-                                                             <Label value="Nettozahler" position="insideTopLeft"
-                                                                 fill="rgba(45, 60, 75, 0.65)" fontFamily="IBM Plex Mono"
-                                                                 fontSize={9} />
-                                                         </ReferenceArea>
+                                                         {Math.min(yPoint, xDomain[1]) < xDomain[1] && (
+                                                             <ReferenceArea yAxisId="left" x1={Math.min(yPoint, xDomain[1])} x2={xDomain[1]} y1={minYDomain} y2={maxYDomain}
+                                                                 fill="transparent" stroke="none"
+                                                                 ifOverflow="extendDomain">
+                                                                 <Label value="Nettozahler" position="insideTopLeft"
+                                                                     fill="rgba(45, 60, 75, 0.65)" fontFamily="IBM Plex Mono"
+                                                                     fontSize={9} />
+                                                             </ReferenceArea>
+                                                         )}
                                                          <ReferenceLine yAxisId="left" y={0} stroke="var(--ink)" strokeWidth={1} />
                                                          <Line yAxisId="left" type="monotone" dataKey="effT0"
                                                              name={adjustSV ? "Netto-Abgabenlast 2026" : "Netto-Transferbilanz 2026"} stroke="var(--steel)"
@@ -1210,181 +1304,192 @@ export default function SteuerreformRechner() {
                                                          <Line yAxisId="left" type="monotone" dataKey="effT1"
                                                              name={adjustSV ? "Netto-Abgabenlast 2028" : "Netto-Transferbilanz 2028"} stroke="var(--gold)"
                                                              strokeWidth={2} dot={false} isAnimationActive={false} />
-                                                         <Line yAxisId="right" type="monotone" dataKey="avgT0"
-                                                             name="Ø-Steuersatz 2026" stroke="var(--steel)"
-                                                             strokeWidth={1.5} dot={false} strokeDasharray="2 2"
-                                                             isAnimationActive={false} />
-                                                         <Line yAxisId="right" type="monotone" dataKey="avgT1"
-                                                             name="Ø-Steuersatz 2028" stroke="var(--turkis)"
-                                                             strokeWidth={1.5} dot={false} strokeDasharray="2 2"
-                                                             isAnimationActive={false} />
+                                                         {!isSimple && (
+                                                             <>
+                                                                 <Line yAxisId="right" type="monotone" dataKey="avgT0"
+                                                                     name="Ø-Steuersatz 2026" stroke="var(--steel)"
+                                                                     strokeWidth={1.5} dot={false} strokeDasharray="2 2"
+                                                                     isAnimationActive={false} />
+                                                                 <Line yAxisId="right" type="monotone" dataKey="avgT1"
+                                                                     name="Ø-Steuersatz 2028" stroke="var(--turkis)"
+                                                                     strokeWidth={1.5} dot={false} strokeDasharray="2 2"
+                                                                     isAnimationActive={false} />
+                                                             </>
+                                                         )}
                                         </LineChart>
                                     </ResponsiveContainer>
-                                    <div className="sr-chart-note">
-                                        <div>
-                                            {adjustSV ? 
-                                                "Unterhalb der Nulllinie übersteigt das Kindergeld die Abgaben (Steuer + SV) – die Familie erhält per saldo mehr, als sie zahlt. Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Abgabenlast." :
-                                                "Unterhalb der Nulllinie übersteigt das Kindergeld die tarifliche Steuer – die Familie erhält per saldo mehr, als sie zahlt (markiert als „Kindergeld\"-Bereich, keine negative Steuer). Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Transferbilanz."
-                                            }
+                                    {!isSimple && (
+                                        <div className="sr-chart-note">
+                                            <div>
+                                                {adjustSV ? 
+                                                    "Unterhalb der Nulllinie übersteigt das Kindergeld die Abgaben (Steuer + SV) – die Familie erhält per saldo mehr, als sie zahlt. Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Abgabenlast." :
+                                                    "Unterhalb der Nulllinie übersteigt das Kindergeld die tarifliche Steuer – die Familie erhält per saldo mehr, als sie zahlt (markiert als „Kindergeld\"-Bereich, keine negative Steuer). Der Ø-Steuersatz (rechte Achse) bezieht sich weiterhin auf die real gezahlte bzw. veranlagte Steuer, nicht auf diese Transferbilanz."
+                                                }
+                                            </div>
+                                            <div style={{ marginTop: "6px", borderTop: "1px dashed var(--line)", paddingTop: "6px" }}>
+                                                <strong>Hintergrund-Zonen (2026):</strong>{" "}
+                                                <span><b>Steuerfrei:</b> bis {eur0(limit2)}</span>
+                                                {kids > 0 ? (
+                                                    <>
+                                                        {" "}· <span><b>Nettoempfänger:</b> bis {eur0(yPoint)}</span>
+                                                        {" "}· <span><b>Nettozahler:</b> ab {eur0(yPoint)}</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {" "}· <span><b>Nettozahler:</b> ab {eur0(limit2)}</span>
+                                                    </>
+                                                )}
+                                                .
+                                            </div>
+                                            <div style={{ marginTop: "4px" }}>
+                                                <strong>Entwicklung im Reformjahr 2028:</strong>{" "}
+                                                <span><b>Steuerbeginn 2028:</b> erst ab {eur0(onset2028Key)} (+{eur0(Math.max(0, onset2028Key - limit2))} steuerfrei)</span>
+                                                {kids > 0 ? (
+                                                    <>
+                                                        {" "}· <span><b>Nettozahler 2028:</b> ab {eur0(netTaxOnset2028)}</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {" "}· <span><b>Nettozahler 2028:</b> ab {eur0(onset2028Key)}</span>
+                                                    </>
+                                                )}
+                                                .
+                                            </div>
                                         </div>
-                                        <div style={{ marginTop: "6px", borderTop: "1px dashed var(--line)", paddingTop: "6px" }}>
-                                            <strong>Hintergrund-Zonen (2026):</strong>{" "}
-                                            <span><b>Steuerfrei:</b> bis {eur0(limit2)}</span>
-                                            {kids > 0 ? (
-                                                <>
-                                                    {" "}· <span><b>Nettoempfänger:</b> bis {eur0(yPoint)}</span>
-                                                    {" "}· <span><b>Nettozahler:</b> ab {eur0(yPoint)}</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {" "}· <span><b>Nettozahler:</b> ab {eur0(limit2)}</span>
-                                                </>
-                                            )}
-                                            .
-                                        </div>
-                                        <div style={{ marginTop: "4px" }}>
-                                            <strong>Entwicklung im Reformjahr 2028:</strong>{" "}
-                                            <span><b>Steuerbeginn 2028:</b> erst ab {eur0(onset2028Key)} (+{eur0(Math.max(0, onset2028Key - limit2))} steuerfrei)</span>
-                                            {kids > 0 ? (
-                                                <>
-                                                    {" "}· <span><b>Nettozahler 2028:</b> ab {eur0(netTaxOnset2028)}</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {" "}· <span><b>Nettozahler 2028:</b> ab {eur0(onset2028Key)}</span>
-                                                </>
-                                            )}
-                                            .
-                                        </div>
-                                    </div>
-                                    <table className="sr-table">
-                                        <thead>
-                                            <tr>
-                                                <th></th>
-                                                <th>2026</th>
-                                                <th>2027</th>
-                                                <th>2028</th>
-                                                <th>Gesamt 27/28</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>Werbungskosten</td>
-                                                <td>{eur0(current.wkT0)}</td>
-                                                <td>{eur0(current.wkT2027)}</td>
-                                                <td>{eur0(current.wkT1)}</td>
-                                                <td>-</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Sozialversicherung (AN, abzugsfähig{adjustSV ? "" : ", unverändert"})</td>
-                                                <td>{eur0(current.saT0)}</td>
-                                                <td>{eur0(current.saT2027)}</td>
-                                                <td>{eur0(current.saT1)}</td>
-                                                <td>-</td>
-                                            </tr>
-                                            {current.entlastungsbetrag > 0 && (
+                                    )}
+                                    {!isSimple && (
+                                        <table className="sr-table">
+                                            <thead>
                                                 <tr>
-                                                    <td>Entlastungsbetrag für Alleinerziehende (§ 24b)</td>
-                                                    <td>{eur0(current.entlastungsbetrag)}</td>
-                                                    <td>{eur0(current.entlastungsbetrag)}</td>
-                                                    <td>{eur0(current.entlastungsbetrag)}</td>
+                                                    <th></th>
+                                                    <th>2026</th>
+                                                    <th>2027</th>
+                                                    <th>2028</th>
+                                                    <th>Gesamt 27/28</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Werbungskosten</td>
+                                                    <td>{eur0(current.wkT0)}</td>
+                                                    <td>{eur0(current.wkT2027)}</td>
+                                                    <td>{eur0(current.wkT1)}</td>
                                                     <td>-</td>
                                                 </tr>
-                                            )}
-                                            <tr>
-                                                <td>zu versteuerndes Einkommen</td>
-                                                <td>{eur0(current.zveT0)}</td>
-                                                <td>{eur0(current.zveT2027)}</td>
-                                                <td>{eur0(current.zveT1)}</td>
-                                                <td>-</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Einkommensteuer (Tarif)</td>
-                                                <td>{eur0(current.estT0)}</td>
-                                                <td>{eur0(current.estT2027)}</td>
-                                                <td>{eur0(current.estT1)}</td>
-                                                <td>-</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Kindergeld / KFB-Vorteil</td>
-                                                <td>{eur0(current.vorteilT0)}</td>
-                                                <td>{eur0(current.vorteilT2027)}</td>
-                                                <td>{eur0(current.vorteilT1)}</td>
-                                                <td>-</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Netto-Transferbilanz (Steuer ./. Kindergeld/KFB)</td>
-                                                <td>{eur0(current.effT0)}</td>
-                                                <td>{eur0(current.effT2027)}</td>
-                                                <td>{eur0(current.effT1)}</td>
-                                                <td>-</td>
-                                            </tr>
-                                            {adjustSV && (
-                                                <>
+                                                <tr>
+                                                    <td>Sozialversicherung (AN, abzugsfähig{adjustSV ? "" : ", unverändert"})</td>
+                                                    <td>{eur0(current.saT0)}</td>
+                                                    <td>{eur0(current.saT2027)}</td>
+                                                    <td>{eur0(current.saT1)}</td>
+                                                    <td>-</td>
+                                                </tr>
+                                                {current.entlastungsbetrag > 0 && (
                                                     <tr>
-                                                        <td>Sozialabgaben gesamt (Arbeitnehmer)</td>
-                                                        <td>{eur0(current.svTotalT0)}</td>
-                                                        <td>{eur0(current.svTotalT2027)}</td>
-                                                        <td>{eur0(current.svTotalT1)}</td>
-                                                        <td>{eur0(current.svTotalT2027 + current.svTotalT1)}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>Reales Haushalts-Nettoeinkommen</td>
-                                                        <td>{eur0(current.nettoT0)}</td>
-                                                        <td>{eur0(current.nettoT2027)}</td>
-                                                        <td>{eur0(current.nettoT1)}</td>
+                                                        <td>Entlastungsbetrag für Alleinerziehende (§ 24b)</td>
+                                                        <td>{eur0(current.entlastungsbetrag)}</td>
+                                                        <td>{eur0(current.entlastungsbetrag)}</td>
+                                                        <td>{eur0(current.entlastungsbetrag)}</td>
                                                         <td>-</td>
                                                     </tr>
-                                                </>
-                                            )}
-                                            <tr className="sr-highlight">
-                                                <td>{adjustSV ? "Netto-Entlastung gesamt / Jahr" : "Entlastung vs. 2026 / Jahr"}</td>
-                                                <td>-</td>
-                                                <td>{eur0(current.entlastung2027)}</td>
-                                                <td>{eur0(current.entlastung2028)}</td>
-                                                <td>{eur0(current.entlastungGesamt)}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                                )}
+                                                <tr>
+                                                    <td>zu versteuerndes Einkommen</td>
+                                                    <td>{eur0(current.zveT0)}</td>
+                                                    <td>{eur0(current.zveT2027)}</td>
+                                                    <td>{eur0(current.zveT1)}</td>
+                                                    <td>-</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Einkommensteuer (Tarif)</td>
+                                                    <td>{eur0(current.estT0)}</td>
+                                                    <td>{eur0(current.estT2027)}</td>
+                                                    <td>{eur0(current.estT1)}</td>
+                                                    <td>-</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Kindergeld / KFB-Vorteil</td>
+                                                    <td>{eur0(current.vorteilT0)}</td>
+                                                    <td>{eur0(current.vorteilT2027)}</td>
+                                                    <td>{eur0(current.vorteilT1)}</td>
+                                                    <td>-</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Netto-Transferbilanz (Steuer ./. Kindergeld/KFB)</td>
+                                                    <td>{eur0(current.effT0)}</td>
+                                                    <td>{eur0(current.effT2027)}</td>
+                                                    <td>{eur0(current.effT1)}</td>
+                                                    <td>-</td>
+                                                </tr>
+                                                {adjustSV && (
+                                                    <>
+                                                        <tr>
+                                                            <td>Sozialabgaben gesamt (Arbeitnehmer)</td>
+                                                            <td>{eur0(current.svTotalT0)}</td>
+                                                            <td>{eur0(current.svTotalT2027)}</td>
+                                                            <td>{eur0(current.svTotalT1)}</td>
+                                                            <td>{eur0(current.svTotalT2027 + current.svTotalT1)}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Reales Haushalts-Nettoeinkommen</td>
+                                                            <td>{eur0(current.nettoT0)}</td>
+                                                            <td>{eur0(current.nettoT2027)}</td>
+                                                            <td>{eur0(current.nettoT1)}</td>
+                                                            <td>-</td>
+                                                        </tr>
+                                                    </>
+                                                )}
+                                                <tr className="sr-highlight">
+                                                    <td>{adjustSV ? "Netto-Entlastung gesamt / Jahr" : "Entlastung vs. 2026 / Jahr"}</td>
+                                                    <td>-</td>
+                                                    <td>{eur0(current.entlastung2027)}</td>
+                                                    <td>{eur0(current.entlastung2028)}</td>
+                                                    <td>{eur0(current.entlastungGesamt)}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    )}
 
-                                    {(() => {
-                                        if (current.guenstigerT1 === "Kinderfreibetrag") {
-                                            return (
-                                                <div style={{
-                                                    marginTop: "16px",
-                                                    padding: "12px",
-                                                    background: "#eaf6f7",
-                                                    border: "1px solid #52b7c1",
-                                                    borderRadius: "3px",
-                                                    fontSize: "11.5px",
-                                                    color: "var(--ink)",
-                                                    fontFamily: "var(--font-sans)",
-                                                    lineHeight: "1.5"
-                                                }}>
-                                                    <strong>Vergleich der Berechnungsmodelle:</strong><br />
-                                                    • Entlastung mit dem offiziellen Kinderfreibetrag (10.236 €): <strong>{eur0(current.entlastung2028)}</strong><br />
-                                                    • Entlastung mit dem vom BMF unterstellten Kinderfreibetrag (10.292 €): <strong>{eur0(current.entlastungBmf2028)}</strong><br />
-                                                    • Differenzbetrag: <strong>{eur0(current.entlastungBmf2028 - current.entlastung2028)}</strong>
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    })()}
+                                    {!isSimple && current.guenstigerT1 === "Kinderfreibetrag" && (
+                                        <div style={{
+                                            marginTop: "16px",
+                                            padding: "12px",
+                                            background: "#eaf6f7",
+                                            border: "1px solid #52b7c1",
+                                            borderRadius: "3px",
+                                            fontSize: "11.5px",
+                                            color: "var(--ink)",
+                                            fontFamily: "var(--font-sans)",
+                                            lineHeight: "1.5"
+                                        }}>
+                                            <strong>Vergleich der Berechnungsmodelle:</strong><br />
+                                            • Entlastung mit dem offiziellen Kinderfreibetrag (10.236 €): <strong>{eur0(current.entlastung2028)}</strong><br />
+                                            • Entlastung mit dem vom BMF unterstellten Kinderfreibetrag (10.292 €): <strong>{eur0(current.entlastungBmf2028)}</strong><br />
+                                            • Differenzbetrag: <strong>{eur0(current.entlastungBmf2028 - current.entlastung2028)}</strong>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="sr-foot">
-                            <p className="sr-foot-title">Steuerliche Parameter und Modellannahmen</p>
-                            <ul className="sr-foot-list">
-                                <li><b>Steuertarif & Grundfreibetrag (GFB):</b> Genäherte Tarifformel nach EStG § 32a. Der Grundfreibetrag steigt für 2027 auf 12.084&nbsp;€ (+300&nbsp;€) und für 2028 auf 12.828&nbsp;€ (+744&nbsp;€ gegenüber 2026). Splittingtarif bei „Verheiratet“, Grundtarif bei „Single“. Ein Spitzensteuersatz von 45&nbsp;% ab 250.000&nbsp;€ zu versteuerndem Einkommen ist im Modell vereinfacht nicht abgebildet.</li>
-                                <li><b>Werbungskosten & Fahrtkosten:</b> Der Arbeitnehmer-Pauschbetrag steigt für 2027 auf 1.330&nbsp;€ (+100&nbsp;€) und für 2028 auf 1.430&nbsp;€ (+200&nbsp;€ gegenüber 2026). Die Entfernungspauschale beträgt einheitlich 0,38&nbsp;€ pro Kilometer und Arbeitstag (220 Tage/Jahr), wie seit 2026 gesetzlich verankert.</li>
-                                <li><b>Kindergeld & Freibeträge:</b> Das Kindergeld steigt ab 2028 von 250&nbsp;€ auf 265&nbsp;€ pro Kind und Monat (2027 bleibt es bei 250&nbsp;€). Der Kinderfreibetrag steigt für 2027 auf 10.056&nbsp;€ (+300&nbsp;€) und für 2028 auf 10.236&nbsp;€ (+480&nbsp;€ gegenüber 2026). Bei Alleinerziehenden wird der Entlastungsbetrag nach § 24b EStG (4.260&nbsp;€ für das erste Kind, +240&nbsp;€ für jedes weitere Kind) steuermindernd einbezogen.</li>
-                                <li><b>Sozialversicherung (Vorsorgeaufwendungen):</b> Reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und Pflegeversicherung, getrennt berechnet je Person und gedeckelt bei der Beitragsbemessungsgrenze (BBG). {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegebeitrag berücksichtigt die Kinderzahl. Vorsorgeaufwendungen sind als Sonderausgaben abziehbar (Renten-/Pflegebeitrag voll, Krankenversicherung zu 96&nbsp;%).</li>
-                            </ul>
-                            <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
-                                keine Steuerberatung.</p>
-                        </div>
+                        {!isSimple && (
+                            <div className="sr-foot">
+                                <p className="sr-foot-title">Steuerliche Parameter und Modellannahmen</p>
+                                <ul className="sr-foot-list">
+                                    <li><b>Steuertarif & Grundfreibetrag (GFB):</b> Genäherte Tarifformel nach EStG § 32a. Der Grundfreibetrag steigt für 2027 auf 12.084&nbsp;€ (+300&nbsp;€) und für 2028 auf 12.828&nbsp;€ (+744&nbsp;€ gegenüber 2026). Splittingtarif bei „Verheiratet“, Grundtarif bei „Single“. Ein Spitzensteuersatz von 45&nbsp;% ab 250.000&nbsp;€ zu versteuerndem Einkommen ist im Modell vereinfacht nicht abgebildet.</li>
+                                    <li><b>Werbungskosten & Fahrtkosten:</b> Der Arbeitnehmer-Pauschbetrag steigt für 2027 auf 1.330&nbsp;€ (+100&nbsp;€) und für 2028 auf 1.430&nbsp;€ (+200&nbsp;€ gegenüber 2026). Die Entfernungspauschale beträgt einheitlich 0,38&nbsp;€ pro Kilometer und Arbeitstag (220 Tage/Jahr), wie seit 2026 gesetzlich verankert.</li>
+                                    <li><b>Kindergeld & Freibeträge:</b> Das Kindergeld steigt ab 2028 von 250&nbsp;€ auf 265&nbsp;€ pro Kind und Monat (2027 bleibt es bei 250&nbsp;€). Der Kinderfreibetrag steigt für 2027 auf 10.056&nbsp;€ (+300&nbsp;€) und für 2028 auf 10.236&nbsp;€ (+480&nbsp;€ gegenüber 2026). Bei Alleinerziehenden wird der Entlastungsbetrag nach § 24b EStG (4.260&nbsp;€ für das erste Kind, +240&nbsp;€ für jedes weitere Kind) steuermindernd einbezogen.</li>
+                                    <li><b>Sozialversicherung (Vorsorgeaufwendungen):</b> Reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und Pflegeversicherung, getrennt berechnet je Person und gedeckelt bei der Beitragsbemessungsgrenze (BBG). {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegebeitrag berücksichtigt die Kinderzahl. Vorsorgeaufwendungen sind als Sonderausgaben abziehbar (Renten-/Pflegebeitrag voll, Krankenversicherung zu 96&nbsp;%).</li>
+                                </ul>
+                                <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
+                                    keine Steuerberatung.</p>
+                            </div>
+                        )}
+                        {isSimple && (
+                            <div className="sr-foot" style={{ marginTop: 20, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+                                <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
+                                    keine Steuerberatung.</p>
+                            </div>
+                        )}
                     </div>
                     );
                     }
