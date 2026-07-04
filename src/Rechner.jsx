@@ -387,7 +387,7 @@ export default function SteuerreformRechner() {
 
   // Recharts Kategorie-Schlüssel (müssen exakt in den Chart-Daten enthalten sein)
   const limit2Key = chartData.find(d => d.brutto >= limit2)?.brutto ?? limit2;
-  const yPoint = chartData.find(d => d.effT0 >= 0)?.brutto ?? 68000;
+  const yPoint = kids > 0 ? (chartData.find(d => d.effT0 > 0)?.brutto ?? limit2Key) : limit2Key;
 
   // 2028 Freibeträge zur Ermittlung des Steuerbeginns und der Nettozahler-Schwelle 2028
   const adultBase2028 = (familienstand === "verheiratet")
@@ -400,7 +400,30 @@ export default function SteuerreformRechner() {
 
   const taxFreeLimit2028 = (adultBase2028 + aeEntlastung2028) / 0.80;
   const onset2028Key = chartData.find(d => d.brutto >= taxFreeLimit2028)?.brutto ?? 2000;
-  const netTaxOnset2028 = chartData.find(d => d.effT1 >= 0)?.brutto ?? 200000;
+  const netTaxOnset2028 = kids > 0 ? (chartData.find(d => d.effT1 > 0)?.brutto ?? 200000) : onset2028Key;
+
+  // Y-Achsen-Dynamisierung
+  const rawMin = kids === 0 ? -2000 : -(kids * 3180 + 2000);
+  const minYDomain = Math.round(rawMin / 1000) * 1000;
+  const maxEff = Math.max(...chartData.map(d => Math.max(d.effT0, d.effT1)));
+  const maxYDomain = Math.ceil(maxEff / 10000) * 10000;
+
+  const leftTicks = [minYDomain, 0];
+  const leftStepSize = maxYDomain > 50000 ? 20000 : 10000;
+  for (let t = leftStepSize; t <= maxYDomain; t += leftStepSize) {
+    leftTicks.push(t);
+  }
+
+  const maxAvg = Math.max(...chartData.map(d => Math.max(d.avgT0, d.avgT1)));
+  const maxRate = Math.max(25, Math.ceil(maxAvg / 5) * 5);
+  const rightTicks = [];
+  const rightStepSize = maxRate > 30 ? 10 : 5;
+  for (let i = 0; i <= maxRate; i += rightStepSize) {
+    rightTicks.push(i);
+  }
+  if (rightTicks[rightTicks.length - 1] !== maxRate) {
+    rightTicks.push(maxRate);
+  }
 
 
   const current = useMemo(
@@ -835,13 +858,9 @@ export default function SteuerreformRechner() {
 
                         <div className="sr-header">
                             <div>
-                                <p className="sr-eyebrow">Entlastungsrechner · §32a EStG, Grund-/Splittingtarif</p>
-                                <h1 className="sr-title sr-display">Steuerreform 2027/28 gegen geltendes Recht 2026</h1>
+                                <p className="sr-eyebrow">Angaben gemäß Koalitionsausschuss vom 02.07.2026</p>
+                                <h1 className="sr-title sr-display">Modellrechner Steuerreform 2027/28</h1>
                             </div>
-                            <p className="sr-subtitle">
-                                Modell mit korrigierter Entfernungspauschale (0,38&nbsp;€/km einheitlich seit 2026) und
-                                den Eckwerten der Koalitionseinigung vom 2.7.2026, volle Wirkung ab 2028.
-                            </p>
                         </div>
 
                         <div className="sr-grid">
@@ -1069,14 +1088,14 @@ export default function SteuerreformRechner() {
                                                 <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }}
                                                     tickFormatter={axisEuro} width={56} 
-                                                    domain={adjustSV ? [-7000, 80000] : [-7000, 40000]}
-                                                    ticks={adjustSV ? [-7000, 0, 20000, 40000, 60000, 80000] : [-7000, 0, 10000, 20000, 30000, 40000]} />
+                                                    domain={[minYDomain, maxYDomain]}
+                                                    ticks={leftTicks} />
                                                 <YAxis yAxisId="right" orientation="right" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }} tickFormatter={(v)=>
                                                     `${v}%`}
                                                     width={44}
-                                                    domain={[0, 25]}
-                                                    ticks={[0, 5, 10, 15, 20, 25]}
+                                                    domain={[0, maxRate]}
+                                                    ticks={rightTicks}
                                                     />
                                                     <Tooltip labelFormatter={(v)=> eur0(v)}
                                                         formatter={(v, name) => [name && name.startsWith("Ø-Steuersatz")
@@ -1087,7 +1106,7 @@ export default function SteuerreformRechner() {
                                                         <ReferenceLine yAxisId="left" x={bruttoAktuellKey}
                                                             stroke="var(--gold)" strokeDasharray="3 3"
                                                             strokeWidth={1.5} />
-                                                        <ReferenceArea yAxisId="left" x2={limit2Key} y1={adjustSV ? -7000 : -7000} y2={adjustSV ? 80000 : 40000}
+                                                        <ReferenceArea yAxisId="left" x2={limit2Key} y1={minYDomain} y2={maxYDomain}
                                                              fill="rgba(45, 60, 75, 0.16)" stroke="none"
                                                              ifOverflow="extendDomain">
                                                              <Label value="Steuerfrei" position="insideTopLeft"
@@ -1095,7 +1114,7 @@ export default function SteuerreformRechner() {
                                                                  fontSize={9} />
                                                          </ReferenceArea>
                                                          {kids > 0 && (
-                                                             <ReferenceArea yAxisId="left" x1={limit2Key} x2={yPoint} y1={adjustSV ? -7000 : -7000} y2={adjustSV ? 80000 : 40000}
+                                                             <ReferenceArea yAxisId="left" x1={limit2Key} x2={yPoint} y1={minYDomain} y2={maxYDomain}
                                                                  fill="rgba(45, 60, 75, 0.05)" stroke="none"
                                                                  ifOverflow="extendDomain">
                                                                  <Label value="Nettoempfänger" position="insideTopLeft"
@@ -1103,7 +1122,7 @@ export default function SteuerreformRechner() {
                                                                      fontSize={9} />
                                                              </ReferenceArea>
                                                          )}
-                                                         <ReferenceArea yAxisId="left" x1={yPoint} x2={200000} y1={adjustSV ? -7000 : -7000} y2={adjustSV ? 80000 : 40000}
+                                                         <ReferenceArea yAxisId="left" x1={yPoint} x2={200000} y1={minYDomain} y2={maxYDomain}
                                                              fill="transparent" stroke="none"
                                                              ifOverflow="extendDomain">
                                                              <Label value="Nettozahler" position="insideTopLeft"
@@ -1282,19 +1301,12 @@ export default function SteuerreformRechner() {
                         </div>
 
                         <div className="sr-foot">
-                            <p className="sr-foot-title">Steuerliche Vereinfachungen in diesem Modell</p>
+                            <p className="sr-foot-title">Steuerliche Parameter und Modellannahmen</p>
                             <ul className="sr-foot-list">
-                                <li><b>Steuertarif:</b> genäherte Formel für den Einkommensteuertarif; Splittingtarif
-                                    bei „Verheiratet", Grundtarif bei „Single". Kein Spitzensteuersatz von 45&nbsp;% für
-                                    sehr hohe Einkommen ab 250.000&nbsp;€.</li>
-                                <li><b>Fahrtkosten:</b> einheitlich 0,38&nbsp;€ pro Kilometer und Arbeitstag (220
-                                    Tage/Jahr), wie seit 2026 gesetzlich vorgesehen.</li>
-                                <li><b>Kinderfreibetrag & Alleinerziehende:</b> Der Kinderfreibetrag ist für 2027 auf 10.056&nbsp;€ (+300&nbsp;€) und für 2028 auf 10.236&nbsp;€ (+480&nbsp;€ gegenüber 2026) festgelegt, wie im Koalitionsbeschluss vom 2. Juli 2026 vorgesehen. Bei Alleinerziehenden wird der Entlastungsbetrag nach § 24b EStG (4.260&nbsp;€ für das erste Kind, +240&nbsp;€ für jedes weitere Kind) steuermindernd berücksichtigt.</li>
-                                 <li><b>Sozialversicherung:</b> reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und
-                                     Pflegeversicherung, getrennt für jede Person und jeweils bis zur eigenen
-                                    Beitragsbemessungsgrenze gedeckelt. {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegeversicherungsbeitrag berücksichtigt die Kinderzahl. Als
-                                    Sonderausgaben angesetzt: Renten- und Pflegebeitrag voll,
-                                    Krankenversicherungsbeitrag zu 96&nbsp;%.</li>
+                                <li><b>Steuertarif & Grundfreibetrag (GFB):</b> Genäherte Tarifformel nach EStG § 32a. Der Grundfreibetrag steigt für 2027 auf 12.084&nbsp;€ (+300&nbsp;€) und für 2028 auf 12.828&nbsp;€ (+744&nbsp;€ gegenüber 2026). Splittingtarif bei „Verheiratet“, Grundtarif bei „Single“. Ein Spitzensteuersatz von 45&nbsp;% ab 250.000&nbsp;€ zu versteuerndem Einkommen ist im Modell vereinfacht nicht abgebildet.</li>
+                                <li><b>Werbungskosten & Fahrtkosten:</b> Der Arbeitnehmer-Pauschbetrag steigt für 2027 auf 1.330&nbsp;€ (+100&nbsp;€) und für 2028 auf 1.430&nbsp;€ (+200&nbsp;€ gegenüber 2026). Die Entfernungspauschale beträgt einheitlich 0,38&nbsp;€ pro Kilometer und Arbeitstag (220 Tage/Jahr), wie seit 2026 gesetzlich verankert.</li>
+                                <li><b>Kindergeld & Freibeträge:</b> Das Kindergeld steigt ab 2028 von 250&nbsp;€ auf 265&nbsp;€ pro Kind und Monat (2027 bleibt es bei 250&nbsp;€). Der Kinderfreibetrag steigt für 2027 auf 10.056&nbsp;€ (+300&nbsp;€) und für 2028 auf 10.236&nbsp;€ (+480&nbsp;€ gegenüber 2026). Bei Alleinerziehenden wird der Entlastungsbetrag nach § 24b EStG (4.260&nbsp;€ für das erste Kind, +240&nbsp;€ für jedes weitere Kind) steuermindernd einbezogen.</li>
+                                <li><b>Sozialversicherung (Vorsorgeaufwendungen):</b> Reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und Pflegeversicherung, getrennt berechnet je Person und gedeckelt bei der Beitragsbemessungsgrenze (BBG). {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegebeitrag berücksichtigt die Kinderzahl. Vorsorgeaufwendungen sind als Sonderausgaben abziehbar (Renten-/Pflegebeitrag voll, Krankenversicherung zu 96&nbsp;%).</li>
                             </ul>
                             <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
                                 keine Steuerberatung.</p>
