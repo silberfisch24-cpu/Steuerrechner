@@ -40,6 +40,12 @@ jobs:
       - name: Build
         run: npm run build
         
+      - name: Delete old artifacts
+        uses: geekyeggo/delete-artifact@v2
+        with:
+          name: github-pages
+        continue-on-error: true
+        
       - name: Setup Pages
         uses: actions/configure-pages@v4
         
