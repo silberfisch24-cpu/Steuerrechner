@@ -533,7 +533,10 @@ export default function SteuerreformRechner() {
                                 ` body {
                                      background: #f2f8fa;
                                      margin: 0;
-                                     padding: 40px 0;
+                                     padding-top: max(40px, env(safe-area-inset-top));
+                                     padding-bottom: max(40px, env(safe-area-inset-bottom));
+                                     padding-left: max(0px, env(safe-area-inset-left));
+                                     padding-right: max(0px, env(safe-area-inset-right));
                                  }
 
                                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;800&family=IBM+Plex+Serif:ital,wght@0,400;0,700;1,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -635,6 +638,16 @@ export default function SteuerreformRechner() {
                                 @media (max-width: 760px) {
                                     .sr-grid {
                                         grid-template-columns: 1fr;
+                                    }
+                                    .sr-root {
+                                        padding: 16px 12px;
+                                        border-radius: 0;
+                                        border-left: none;
+                                        border-right: none;
+                                        box-shadow: none;
+                                    }
+                                    .sr-chart-wrap {
+                                        padding: 12px 4px 6px 4px;
                                     }
                                 }
 
@@ -1153,8 +1166,8 @@ export default function SteuerreformRechner() {
                                                  background: "var(--turkis)" , opacity: 0.3, height: "10px" , borderRadius:
                                                  0 }} /> Kindergeld-Erhöhung ({eur0(Math.max(0, current.kgT1 - current.kgT0))})</span>
                                      </div>
-                                     <ResponsiveContainer width="100%" height={360}>
-                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
+                                     <ResponsiveContainer width="100%" height={windowWidth <= 760 ? undefined : 360} aspect={windowWidth <= 760 ? 1.0 : undefined}>
+                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
                                              <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                              <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`}
                                                  stroke="var(--ink-soft)"
@@ -1246,8 +1259,8 @@ export default function SteuerreformRechner() {
                                             Profil: {km1}{verheiratet ? ` km / ${km2} km` : " km"}, {kids} Kind{kids ===
                                             1 ? "" : "er"}{!isSimple && ` · ${adjustSV ? "negativer Bereich = Kindergeld übersteigt Steuer + SV" : "negativer Bereich = Kindergeld übersteigt die Steuer"}`}</span>
                                     </div>
-                                    <ResponsiveContainer width="100%" height={320}>
-                                        <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: 6, left: 0 }}>
+                                    <ResponsiveContainer width="100%" height={windowWidth <= 760 ? undefined : 320} aspect={windowWidth <= 760 ? 1.0 : undefined}>
+                                        <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
                                             <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                             <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`} ticks={xAxisTicks}
                                                 stroke="var(--ink-soft)"
