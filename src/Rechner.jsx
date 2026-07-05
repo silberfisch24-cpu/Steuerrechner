@@ -285,7 +285,7 @@ function calculateNetRelief(brutto1, brutto2, km1, km2, kids, familienstand, adj
 const eur0 = (v) =>
   v.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
-const axisEuro = (v) => `${v.toLocaleString("de-DE")}€`;
+const axisEuro = (v) => Math.abs(v) >= 1000 ? `${v / 1000}` : `${v}`;
 
 const REF_PROFILES = [
   { key: "stadt", label: "Städter (≤10 km / ≤10 km)", km1: 5, km2: 5, color: "var(--c-stadt)" },
@@ -305,10 +305,10 @@ const BMF_FAMILIES = [
 
 export default function SteuerreformRechner() {
   const [familienstand, setFamilienstand] = useState("verheiratet");
-  const [brutto1, setBrutto1] = useState(34000);
-  const [brutto2, setBrutto2] = useState(18000);
-  const [km1, setKm1] = useState(20);
-  const [km2, setKm2] = useState(8);
+  const [brutto1, setBrutto1] = useState(38400);
+  const [brutto2, setBrutto2] = useState(38400);
+  const [km1, setKm1] = useState(0);
+  const [km2, setKm2] = useState(0);
   const [kids, setKids] = useState(2);
   const [adjustSV, setAdjustSV] = useState(false);
   const [viewMode, setViewMode] = useState("einfach"); // "einfach" | "detailliert"
@@ -1058,12 +1058,12 @@ export default function SteuerreformRechner() {
                                         value={activeFamilyId}
                                         onChange={handleFamilyChange}
                                     >
-                                        <option value="">-- Eigene Werte (Freie Eingabe) --</option>
                                         {BMF_FAMILIES.map(f => (
                                             <option key={f.id} value={f.id}>
                                                 {f.name}
                                             </option>
                                         ))}
+                                        <option value="">Eigene Eingabe</option>
                                     </select>
                                 </div>
 
@@ -1241,7 +1241,7 @@ export default function SteuerreformRechner() {
                                                  background: "var(--turkis)" , opacity: 0.3, height: "10px" , borderRadius:
                                                  0 }} /> Kindergeld-Erhöhung ({eur0(Math.max(0, current.kgT1 - current.kgT0))})</span>
                                      </div>
-                                     <ResponsiveContainer width="100%" height={windowWidth <= 760 ? windowWidth - 24 : 360}>
+                                     <ResponsiveContainer width="100%" height={windowWidth <= 760 ? (windowWidth - 24) * 0.9 : 360}>
                                          <LineChart data={chartData} margin={{ top: 6, right: windowWidth <= 760 ? 4 : 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
                                              <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                              <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`}
@@ -1253,7 +1253,7 @@ export default function SteuerreformRechner() {
                                                  />
                                                  <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
                                                      fontFamily: "IBM Plex Mono" , fontSize: 11 }}
-                                                     tickFormatter={axisEuro} width={56} />
+                                                     tickFormatter={axisEuro} width={windowWidth <= 760 ? 36 : 56} />
                                                  <YAxis yAxisId="right" orientation="right" width={windowWidth <= 760 ? 0 : 44} stroke="transparent" tick={false} />
                                                      <Tooltip labelFormatter={(v)=> eur0(v)}
                                                          contentStyle={{ fontFamily: "IBM Plex Mono", fontSize: 12,
@@ -1334,7 +1334,7 @@ export default function SteuerreformRechner() {
                                             Profil: {km1}{verheiratet ? ` km / ${km2} km` : " km"}, {kids} Kind{kids ===
                                             1 ? "" : "er"}{!isSimple && ` · ${adjustSV ? "negativer Bereich = Kindergeld übersteigt Steuer + SV" : "negativer Bereich = Kindergeld übersteigt die Steuer"}`}</span>
                                     </div>
-                                    <ResponsiveContainer width="100%" height={windowWidth <= 760 ? windowWidth - 24 : 320}>
+                                    <ResponsiveContainer width="100%" height={windowWidth <= 760 ? (windowWidth - 24) * 0.9 : 320}>
                                         <LineChart data={chartData} margin={{ top: 6, right: windowWidth <= 760 ? 4 : 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
                                             <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                             <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`} ticks={xAxisTicks}
@@ -1345,7 +1345,7 @@ export default function SteuerreformRechner() {
                                                 />
                                                 <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
                                                     fontFamily: "IBM Plex Mono" , fontSize: 11 }}
-                                                    tickFormatter={axisEuro} width={56} 
+                                                    tickFormatter={axisEuro} width={windowWidth <= 760 ? 36 : 56} 
                                                     domain={[minYDomain, maxYDomain]}
                                                     ticks={leftTicks} />
                                                 {!isSimple && (
@@ -1613,13 +1613,13 @@ export default function SteuerreformRechner() {
                                     <li><b>Sozialversicherung (Vorsorgeaufwendungen):</b> Reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und Pflegeversicherung, getrennt berechnet je Person und gedeckelt bei der Beitragsbemessungsgrenze (BBG). {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegebeitrag berücksichtigt die Kinderzahl. Vorsorgeaufwendungen sind als Sonderausgaben abziehbar (Renten-/Pflegebeitrag voll, Krankenversicherung zu 96&nbsp;%).</li>
                                 </ul>
                                 <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
-                                    keine Steuerberatung. (v1.06)</p>
+                                    keine Steuerberatung. (v1.07)</p>
                             </div>
                         )}
                         {isSimple && (
                             <div className="sr-foot" style={{ marginTop: 20, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
                                 <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
-                                    keine Steuerberatung. (v1.06)</p>
+                                    keine Steuerberatung. (v1.07)</p>
                             </div>
                         )}
                     </div>
