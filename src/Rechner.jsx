@@ -1503,13 +1503,13 @@ export default function SteuerreformRechner() {
                                     <li><b>Sozialversicherung (Vorsorgeaufwendungen):</b> Reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und Pflegeversicherung, getrennt berechnet je Person und gedeckelt bei der Beitragsbemessungsgrenze (BBG). {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegebeitrag berücksichtigt die Kinderzahl. Vorsorgeaufwendungen sind als Sonderausgaben abziehbar (Renten-/Pflegebeitrag voll, Krankenversicherung zu 96&nbsp;%).</li>
                                 </ul>
                                 <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
-                                    keine Steuerberatung. (v1.05)</p>
+                                    keine Steuerberatung. (v1.04)</p>
                             </div>
                         )}
                         {isSimple && (
                             <div className="sr-foot" style={{ marginTop: 20, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
                                 <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
-                                    keine Steuerberatung. (v1.05)</p>
+                                    keine Steuerberatung. (v1.04)</p>
                             </div>
                         )}
                     </div>
