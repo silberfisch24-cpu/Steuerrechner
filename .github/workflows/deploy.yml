@@ -1,60 +1,76 @@
 name: Deploy to GitHub Pages
 
 on:
-  # Löst den Build aus, wenn du auf den "main"-Branch pushst
   push:
     branches: ['main']
-  # Erlaubt das manuelle Starten des Workflows über die GitHub-Oberfläche
   workflow_dispatch:
 
-# Setzt die nötigen Rechte für das Deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Verhindert, dass mehrere Builds gleichzeitig laufen
 concurrency:
   group: 'pages'
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: '22'
+  ARTIFACT_NAME: 'github-pages'
+  ARTIFACT_RETENTION: 1
+
 jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 10
+
+      - name: Build application
+        run: npm run build
+        timeout-minutes: 10
+
+      - name: List build output
+        run: |
+          echo "Build artifacts:"
+          ls -la dist/ || echo "Build directory not found!"
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+          name: ${{ env.ARTIFACT_NAME }}
+          retention-days: ${{ env.ARTIFACT_RETENTION }}
+
   deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-          
-      - name: Install dependencies
-        run: npm install
-        
-      - name: Build
-        run: npm run build
-        
-      - name: Delete old artifacts
-        uses: geekyeggo/delete-artifact@v2
-        with:
-          name: github-pages
-        continue-on-error: true
-        
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-        
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          # Hier wird GitHub gesagt, dass der Output im "dist" Ordner liegt
-          path: './dist'
-          
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 30000  # 30 Sekunden
+          artifact_name: ${{ env.ARTIFACT_NAME }}
+
+      - name: Deployment Status
+        if: always()
+        run: |
+          echo "Deployment Status: ${{ job.status }}"
+          echo "Page URL: ${{ steps.deployment.outputs.page_url }}"
