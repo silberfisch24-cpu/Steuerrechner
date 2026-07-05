@@ -590,6 +590,50 @@ export default function SteuerreformRechner() {
                                      font-style: italic;
                                  }
 
+                                .sr-mobile-cards {
+                                    display: flex;
+                                    flex-direction: column;
+                                    gap: 16px;
+                                    margin-top: 16px;
+                                }
+                                .sr-mobile-card {
+                                    background: var(--paper);
+                                    border: 1px solid var(--line);
+                                    border-radius: 6px;
+                                    padding: 12px;
+                                }
+                                .sr-mobile-card-title {
+                                    font-family: 'Inter', sans-serif;
+                                    font-weight: 800;
+                                    font-size: 16px;
+                                    border-bottom: 1px solid var(--line);
+                                    padding-bottom: 8px;
+                                    margin-bottom: 8px;
+                                }
+                                .sr-mobile-card-row {
+                                    display: flex;
+                                    justify-content: space-between;
+                                    font-size: 14px;
+                                    padding: 4px 0;
+                                    gap: 12px;
+                                }
+                                .sr-mobile-card-row span:first-child {
+                                    color: var(--ink-soft);
+                                }
+                                .sr-mobile-card-row span:last-child {
+                                    font-family: 'IBM Plex Mono', monospace;
+                                    text-align: right;
+                                }
+                                .sr-mobile-card-row.sr-highlight {
+                                    font-weight: bold;
+                                    border-top: 2px solid var(--line);
+                                    margin-top: 6px;
+                                    padding-top: 8px;
+                                }
+                                .sr-mobile-card-row.sr-highlight span:first-child {
+                                    color: var(--ink);
+                                } }
+
                                 .sr-header {
                                     display: flex;
                                     justify-content: space-between;
@@ -641,6 +685,10 @@ export default function SteuerreformRechner() {
                                     }
                                     .sr-root {
                                         padding: 16px 12px;
+                                        padding-top: max(16px, env(safe-area-inset-top));
+                                        padding-bottom: max(16px, env(safe-area-inset-bottom));
+                                        padding-left: max(12px, env(safe-area-inset-left));
+                                        padding-right: max(12px, env(safe-area-inset-right));
                                         border-radius: 0;
                                         border-left: none;
                                         border-right: none;
@@ -900,6 +948,11 @@ export default function SteuerreformRechner() {
                                     font-style: italic;
                                 }
 
+                                .sr-table-wrap {
+                                    width: 100%;
+                                    overflow-x: auto;
+                                    -webkit-overflow-scrolling: touch;
+                                }
                                 .sr-table {
                                     margin-top: 18px;
                                     width: 100%;
@@ -1112,8 +1165,29 @@ export default function SteuerreformRechner() {
                                          </div>
                                      )}
 
-                                      {!isSimple && (
-                                          <table className="sr-mini-table">
+                                      {!isSimple && windowWidth <= 760 ? (
+                                          <div className="sr-mobile-cards">
+                                              <div className="sr-mobile-card">
+                                                  <div className="sr-mobile-card-title">2026</div>
+                                                  <div className="sr-mobile-card-row"><span>Ø-Steuersatz</span> <span>{current.avgT0.toFixed(1)}%</span></div>
+                                                  <div className="sr-mobile-card-row"><span>Grenzsteuersatz</span> <span>{current.grenzT0.toFixed(1)}%</span></div>
+                                              </div>
+                                              <div className="sr-mobile-card">
+                                                  <div className="sr-mobile-card-title">2027</div>
+                                                  <div className="sr-mobile-card-row"><span>Ø-Steuersatz</span> <span>{current.avgT2027.toFixed(1)}%</span></div>
+                                                  <div className="sr-mobile-card-row"><span>Grenzsteuersatz</span> <span>{current.grenzT2027.toFixed(1)}%</span></div>
+                                                  <div className="sr-mobile-card-row sr-highlight"><span>Entlastung vs. '26</span> <span>{eur0(current.entlastung2027)}</span></div>
+                                              </div>
+                                              <div className="sr-mobile-card">
+                                                  <div className="sr-mobile-card-title">2028</div>
+                                                  <div className="sr-mobile-card-row"><span>Ø-Steuersatz</span> <span>{current.avgT1.toFixed(1)}%</span></div>
+                                                  <div className="sr-mobile-card-row"><span>Grenzsteuersatz</span> <span>{current.grenzT1.toFixed(1)}%</span></div>
+                                                  <div className="sr-mobile-card-row sr-highlight"><span>Entlastung vs. '26</span> <span>{eur0(current.entlastung2028)}</span></div>
+                                              </div>
+                                          </div>
+                                      ) : !isSimple && (
+                                          <div className="sr-table-wrap">
+                                              <table className="sr-mini-table">
                                               <thead>
                                                   <tr>
                                                       <th></th>
@@ -1143,6 +1217,7 @@ export default function SteuerreformRechner() {
                                                   </tr>
                                               </tbody>
                                           </table>
+                                          </div>
                                       )}
                                 </div>
                             </div>
@@ -1166,8 +1241,8 @@ export default function SteuerreformRechner() {
                                                  background: "var(--turkis)" , opacity: 0.3, height: "10px" , borderRadius:
                                                  0 }} /> Kindergeld-Erhöhung ({eur0(Math.max(0, current.kgT1 - current.kgT0))})</span>
                                      </div>
-                                     <ResponsiveContainer width="100%" height={windowWidth <= 760 ? undefined : 360} aspect={windowWidth <= 760 ? 1.0 : undefined}>
-                                         <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
+                                     <ResponsiveContainer width="100%" height={windowWidth <= 760 ? windowWidth - 24 : 360}>
+                                         <LineChart data={chartData} margin={{ top: 6, right: windowWidth <= 760 ? 4 : 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
                                              <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                              <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`}
                                                  stroke="var(--ink-soft)"
@@ -1179,7 +1254,7 @@ export default function SteuerreformRechner() {
                                                  <YAxis yAxisId="left" stroke="var(--ink-soft)" tick={{
                                                      fontFamily: "IBM Plex Mono" , fontSize: 11 }}
                                                      tickFormatter={axisEuro} width={56} />
-                                                 <YAxis yAxisId="right" orientation="right" width={44} stroke="transparent" tick={false} />
+                                                 <YAxis yAxisId="right" orientation="right" width={windowWidth <= 760 ? 0 : 44} stroke="transparent" tick={false} />
                                                      <Tooltip labelFormatter={(v)=> eur0(v)}
                                                          contentStyle={{ fontFamily: "IBM Plex Mono", fontSize: 12,
                                                          border: "1px solid var(--line)" }}
@@ -1259,8 +1334,8 @@ export default function SteuerreformRechner() {
                                             Profil: {km1}{verheiratet ? ` km / ${km2} km` : " km"}, {kids} Kind{kids ===
                                             1 ? "" : "er"}{!isSimple && ` · ${adjustSV ? "negativer Bereich = Kindergeld übersteigt Steuer + SV" : "negativer Bereich = Kindergeld übersteigt die Steuer"}`}</span>
                                     </div>
-                                    <ResponsiveContainer width="100%" height={windowWidth <= 760 ? undefined : 320} aspect={windowWidth <= 760 ? 1.0 : undefined}>
-                                        <LineChart data={chartData} margin={{ top: 6, right: 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
+                                    <ResponsiveContainer width="100%" height={windowWidth <= 760 ? windowWidth - 24 : 320}>
+                                        <LineChart data={chartData} margin={{ top: 6, right: windowWidth <= 760 ? 4 : 18, bottom: windowWidth <= 760 ? 20 : 6, left: 0 }}>
                                             <CartesianGrid stroke="var(--grid-color)" strokeDasharray="2 3" />
                                             <XAxis dataKey="brutto" type="number" domain={xDomain} tickFormatter={(v)=> `${v / 1000}`} ticks={xAxisTicks}
                                                 stroke="var(--ink-soft)"
@@ -1283,7 +1358,7 @@ export default function SteuerreformRechner() {
                                                         />
                                                 )}
                                                 {isSimple && (
-                                                    <YAxis yAxisId="right" orientation="right" width={44} stroke="transparent" tick={false} />
+                                                    <YAxis yAxisId="right" orientation="right" width={windowWidth <= 760 ? 0 : 44} stroke="transparent" tick={false} />
                                                 )}
                                                     <Tooltip labelFormatter={(v)=> eur0(v)}
                                                         formatter={(v, name) => [name && name.startsWith("Ø-Steuersatz")
@@ -1379,8 +1454,42 @@ export default function SteuerreformRechner() {
                                             </div>
                                         </div>
                                     )}
-                                    {!isSimple && (
-                                        <table className="sr-table">
+                                    {!isSimple && windowWidth <= 760 ? (
+                                        <div className="sr-mobile-cards">
+                                            {[
+                                                { year: "2026", wk: current.wkT0, sa: current.saT0, entlastungsbetrag: current.entlastungsbetrag, zve: current.zveT0, est: current.estT0, vorteil: current.vorteilT0, eff: current.effT0, svTotal: current.svTotalT0, netto: current.nettoT0, entlastung: null },
+                                                { year: "2027", wk: current.wkT2027, sa: current.saT2027, entlastungsbetrag: current.entlastungsbetrag, zve: current.zveT2027, est: current.estT2027, vorteil: current.vorteilT2027, eff: current.effT2027, svTotal: current.svTotalT2027, netto: current.nettoT2027, entlastung: current.entlastung2027 },
+                                                { year: "2028", wk: current.wkT1, sa: current.saT1, entlastungsbetrag: current.entlastungsbetrag, zve: current.zveT1, est: current.estT1, vorteil: current.vorteilT1, eff: current.effT1, svTotal: current.svTotalT1, netto: current.nettoT1, entlastung: current.entlastung2028 }
+                                            ].map(y => (
+                                                <div className="sr-mobile-card" key={y.year}>
+                                                    <div className="sr-mobile-card-title">{y.year}</div>
+                                                    <div className="sr-mobile-card-row"><span>Werbungskosten</span> <span>{eur0(y.wk)}</span></div>
+                                                    <div className="sr-mobile-card-row"><span>Soz.-Versicherung</span> <span>{eur0(y.sa)}</span></div>
+                                                    {current.entlastungsbetrag > 0 && <div className="sr-mobile-card-row"><span>Alleinerziehend (§24b)</span> <span>{eur0(y.entlastungsbetrag)}</span></div>}
+                                                    <div className="sr-mobile-card-row"><span>zu verst. Einkommen</span> <span>{eur0(y.zve)}</span></div>
+                                                    <div className="sr-mobile-card-row"><span>Einkommensteuer</span> <span>{eur0(y.est)}</span></div>
+                                                    <div className="sr-mobile-card-row"><span>Kindergeld-Vorteil</span> <span>{eur0(y.vorteil)}</span></div>
+                                                    <div className="sr-mobile-card-row"><span>Netto-Transferbilanz</span> <span>{eur0(y.eff)}</span></div>
+                                                    {adjustSV && (
+                                                        <>
+                                                            <div className="sr-mobile-card-row"><span>Sozialabgaben</span> <span>{eur0(y.svTotal)}</span></div>
+                                                            <div className="sr-mobile-card-row"><span>Haushalts-Netto</span> <span>{eur0(y.netto)}</span></div>
+                                                        </>
+                                                    )}
+                                                    {y.entlastung !== null && (
+                                                        <div className="sr-mobile-card-row sr-highlight"><span>{adjustSV ? "Netto-Entl. vs '26" : "Entlastung vs '26"}</span> <span>{eur0(y.entlastung)}</span></div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <div className="sr-mobile-card">
+                                                <div className="sr-mobile-card-title">Gesamt 27/28</div>
+                                                {adjustSV && <div className="sr-mobile-card-row"><span>Sozialabgaben</span> <span>{eur0(current.svTotalT2027 + current.svTotalT1)}</span></div>}
+                                                <div className="sr-mobile-card-row sr-highlight"><span>{adjustSV ? "Netto-Entl. ges." : "Entlastung gesamt"}</span> <span>{eur0(current.entlastungGesamt)}</span></div>
+                                            </div>
+                                        </div>
+                                    ) : !isSimple && (
+                                        <div className="sr-table-wrap">
+                                            <table className="sr-table">
                                             <thead>
                                                 <tr>
                                                     <th></th>
@@ -1468,7 +1577,8 @@ export default function SteuerreformRechner() {
                                                     <td>{eur0(current.entlastungGesamt)}</td>
                                                 </tr>
                                             </tbody>
-                                        </table>
+                                            </table>
+                                        </div>
                                     )}
 
                                     {!isSimple && current.guenstigerT1 === "Kinderfreibetrag" && (
@@ -1503,13 +1613,13 @@ export default function SteuerreformRechner() {
                                     <li><b>Sozialversicherung (Vorsorgeaufwendungen):</b> Reale Beiträge zur Renten-, Arbeitslosen-, Kranken- und Pflegeversicherung, getrennt berechnet je Person und gedeckelt bei der Beitragsbemessungsgrenze (BBG). {adjustSV ? "Bei aktivierter SV-Anpassung werden für 2028 die prognostizierten Grenzwerte für 2027 verwendet (76.800\u00a0€ KV/PV, 104.400\u00a0€ RV/ALV), andernfalls die Werte von 2026 (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)." : "Als Beitragsbemessungsgrenzen werden standardmäßig die Werte von 2026 verwendet (69.750\u00a0€ KV/PV, 101.400\u00a0€ RV/ALV)."} Der Pflegebeitrag berücksichtigt die Kinderzahl. Vorsorgeaufwendungen sind als Sonderausgaben abziehbar (Renten-/Pflegebeitrag voll, Krankenversicherung zu 96&nbsp;%).</li>
                                 </ul>
                                 <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
-                                    keine Steuerberatung. (v1.05)</p>
+                                    keine Steuerberatung. (v1.06)</p>
                             </div>
                         )}
                         {isSimple && (
                             <div className="sr-foot" style={{ marginTop: 20, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
                                 <p className="sr-foot-disclaimer">Alle Werte sind eine Modellrechnung zur groben Einordnung,
-                                    keine Steuerberatung. (v1.05)</p>
+                                    keine Steuerberatung. (v1.06)</p>
                             </div>
                         )}
                     </div>
